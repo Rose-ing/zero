@@ -35,11 +35,13 @@ body {
 }
 
 #messages:empty::before {
-  content: "Hola, soy el asistente de Zero. Preguntame sobre productos, pedidos o clientes.";
+  content: "Contame qué vendés (URL o descripción) y te busco clientes potenciales en Google Maps.";
   color: #999;
   font-size: 14px;
   text-align: center;
   margin: auto;
+  max-width: 360px;
+  line-height: 1.5;
 }
 
 .msg {
@@ -144,8 +146,90 @@ body {
 #send-btn:hover { opacity: 0.8; }
 #send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
+.msg.results {
+  max-width: 100%;
+  width: 100%;
+  background: #fff;
+  border: 1px solid #e5e5e5;
+  padding: 16px;
+}
+
+.results-header {
+  font-size: 13px;
+  color: #666;
+  margin-bottom: 12px;
+}
+
+.results-header strong {
+  color: #1a1a1a;
+  font-size: 15px;
+}
+
+.results-empty {
+  font-size: 13px;
+  color: #999;
+  padding: 12px;
+  text-align: center;
+}
+
+.leads-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  margin-bottom: 12px;
+}
+
+.leads-table th,
+.leads-table td {
+  padding: 8px 10px;
+  text-align: left;
+  border-bottom: 1px solid #eee;
+  vertical-align: top;
+}
+
+.leads-table th {
+  background: #f7f7f7;
+  font-weight: 600;
+  position: sticky;
+  top: 0;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #666;
+}
+
+.leads-table tbody tr:hover {
+  background: #fafafa;
+}
+
+.leads-table a {
+  color: #1a1a1a;
+  text-decoration: underline;
+}
+
+.export-btn {
+  background: #1a1a1a;
+  color: #fff;
+  border: none;
+  padding: 8px 14px;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.export-btn:hover {
+  opacity: 0.85;
+}
+
 @media (max-width: 720px) {
   #chat {
     border: none;
+  }
+  .leads-table {
+    font-size: 11px;
+  }
+  .leads-table th,
+  .leads-table td {
+    padding: 6px 4px;
   }
 }

@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/Rose-ing/zero/internal/agent"
+	"github.com/Rose-ing/zero/internal/places"
 )
 
 type chatRequest struct {
@@ -21,6 +22,25 @@ type errorResponse struct {
 	Error string `json:"error"`
 }
 
+type intakeResponse struct {
+	Reply        string                 `json:"reply,omitempty"`
+	SearchParams map[string]interface{} `json:"search_params,omitempty"`
+	Done         bool                   `json:"done"`
+}
+
+type searchRequest struct {
+	BusinessType string  `json:"business_type"`
+	Location     string  `json:"location"`
+	MinRating    float64 `json:"min_rating,omitempty"`
+	MinReviews   int     `json:"min_reviews,omitempty"`
+}
+
+type searchResponse struct {
+	Params places.SearchParams `json:"params"`
+	Leads  []places.Lead       `json:"leads"`
+	Count  int                 `json:"count"`
+}
+
 func main() {
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -29,13 +49,13 @@ func main() {
 
 	mux := http.NewServeMux()
 
-	// Serve static frontend
+	// Static frontend (client-facing flow at /, backoffice prototype at /backoffice)
 	mux.Handle("/", http.FileServer(http.Dir("web")))
 
-	// Chat API endpoint
 	mux.HandleFunc("POST /api/chat", handleChat)
+	mux.HandleFunc("POST /api/intake", handleIntake)
+	mux.HandleFunc("POST /api/search", handleSearch)
 
-	// Health check
 	mux.HandleFunc("GET /api/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
@@ -47,29 +67,75 @@ func main() {
 	}
 }
 
-func handleChat(w http.ResponseWriter, r *http.Request) {
+func writeJSON(w http.ResponseWriter, status int, v interface{}) {
 	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(v)
+}
 
+func handleChat(w http.ResponseWriter, r *http.Request) {
 	var req chatRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(errorResponse{Error: "request inválido"})
+		writeJSON(w, 400, errorResponse{Error: "request inválido"})
 		return
 	}
-
 	if len(req.Messages) == 0 {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(errorResponse{Error: "no hay mensajes"})
+		writeJSON(w, 400, errorResponse{Error: "no hay mensajes"})
 		return
 	}
-
 	reply, err := agent.Chat(req.Messages)
 	if err != nil {
-		log.Printf("Error en agent.Chat: %v", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(errorResponse{Error: "error procesando la consulta"})
+		log.Printf("agent.Chat: %v", err)
+		writeJSON(w, 500, errorResponse{Error: "error procesando la consulta"})
 		return
 	}
+	writeJSON(w, 200, chatResponse{Reply: reply})
+}
 
-	json.NewEncoder(w).Encode(chatResponse{Reply: reply})
+func handleIntake(w http.ResponseWriter, r *http.Request) {
+	var req chatRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, 400, errorResponse{Error: "request inválido"})
+		return
+	}
+	if len(req.Messages) == 0 {
+		writeJSON(w, 400, errorResponse{Error: "no hay mensajes"})
+		return
+	}
+	result, err := agent.Intake(req.Messages)
+	if err != nil {
+		log.Printf("agent.Intake: %v", err)
+		writeJSON(w, 500, errorResponse{Error: "error en el intake"})
+		return
+	}
+	writeJSON(w, 200, intakeResponse{
+		Reply:        result.Reply,
+		SearchParams: result.SearchParams,
+		Done:         result.Done,
+	})
+}
+
+func handleSearch(w http.ResponseWriter, r *http.Request) {
+	var req searchRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, 400, errorResponse{Error: "request inválido"})
+		return
+	}
+	if req.BusinessType == "" || req.Location == "" {
+		writeJSON(w, 400, errorResponse{Error: "business_type y location son obligatorios"})
+		return
+	}
+	params := places.SearchParams{
+		BusinessType: req.BusinessType,
+		Location:     req.Location,
+		MinRating:    req.MinRating,
+		MinReviews:   req.MinReviews,
+	}
+	leads, err := places.Search(params)
+	if err != nil {
+		log.Printf("places.Search: %v", err)
+		writeJSON(w, 500, errorResponse{Error: "error buscando en Google Maps"})
+		return
+	}
+	writeJSON(w, 200, searchResponse{Params: params, Leads: leads, Count: len(leads)})
 }
