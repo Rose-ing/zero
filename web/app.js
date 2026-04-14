@@ -90,94 +90,67 @@ function renderResults(data) {
   const wrap = document.createElement("div");
   wrap.className = "msg results";
 
-  if (data.count === 0) {
+  // Solo leads contactables (con canal y no cadenas) — el resto corre por detrás
+  const contactable = data.leads.filter(
+    (l) => l.best_channel && l.best_channel !== "none" && !(l.breakdown && l.breakdown.is_chain)
+  );
+
+  if (contactable.length === 0) {
     wrap.innerHTML = `
-      <div class="results-header">
-        <div class="results-header-left">
-          <span class="results-count">0</span>
-          <span class="results-subtitle">resultados</span>
-        </div>
+      <div class="hero-result">
+        <div class="hero-kicker">sin resultados</div>
+        <h2 class="hero-title">no encontramos clientes potenciales contactables</h2>
+        <p class="hero-sub">probá con otra zona, otro tipo de comercio, o ajustá los filtros.</p>
       </div>
-      <div class="results-empty">no se encontraron negocios. probá con otra zona o tipo de comercio.</div>
     `;
     messagesEl.appendChild(wrap);
     messagesEl.scrollTop = messagesEl.scrollHeight;
     return;
   }
 
-  // Calculate stats
-  const ready = data.leads.filter((l) => l.score >= 55 && !(l.breakdown && l.breakdown.is_chain)).length;
-  const avgScore = Math.round(
-    data.leads.reduce((s, l) => s + (l.score || 0), 0) / data.leads.length
-  );
-  const totalTAM = data.leads.reduce((s, l) => s + (l.estimated_ticket_ars || 0), 0);
+  // Mix por categoría (para dar confianza sin exponer data lead-level)
+  const categories = {};
+  contactable.forEach((l) => {
+    const c = prettifyMix(l.category);
+    categories[c] = (categories[c] || 0) + 1;
+  });
+  const mix = Object.entries(categories)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([cat, n]) => `${Math.round((n / contactable.length) * 100)}% ${cat}`)
+    .join(" · ");
 
   wrap.innerHTML = `
-    <div class="results-header">
-      <div class="results-header-left">
-        <span class="results-count">${data.count}</span>
-        <span class="results-subtitle">clientes potenciales</span>
-      </div>
-      <div class="results-subtitle">ordenado por score ↓</div>
-    </div>
-    <div class="stats-strip">
-      <div class="stat">
-        <div class="stat-label">ready to contact</div>
-        <div class="stat-value">${ready}<span class="unit">/ ${data.count}</span></div>
-      </div>
-      <div class="stat">
-        <div class="stat-label">avg score</div>
-        <div class="stat-value">${avgScore}<span class="unit">/100</span></div>
-      </div>
-      <div class="stat">
-        <div class="stat-label">TAM mensual est.</div>
-        <div class="stat-value">$${formatNumCompact(totalTAM)}<span class="unit">ARS</span></div>
-      </div>
-      <div class="stat">
-        <div class="stat-label">con contacto directo</div>
-        <div class="stat-value">${data.leads.filter((l) => l.best_channel === "email" || l.best_channel === "whatsapp").length}<span class="unit">leads</span></div>
-      </div>
-    </div>
-    <div class="table-wrap">
-      <table class="leads-table">
-        <thead>
-          <tr>
-            <th class="col-rank">#</th>
-            <th>Score</th>
-            <th>Negocio</th>
-            <th>Categoría</th>
-            <th>Rating · Reviews</th>
-            <th>Precio</th>
-            <th>Visitas/mes</th>
-            <th>Mejor canal</th>
-            <th>Ticket est.</th>
-            <th>Por qué</th>
-          </tr>
-        </thead>
-        <tbody></tbody>
-      </table>
-    </div>
-    <div class="results-footer">
-      <div class="footer-note">${data.leads.filter(l => l.breakdown && l.breakdown.is_chain).length} cadenas detectadas · listas para derivar al agente de outreach</div>
-      <button class="export-btn" type="button">↓ Exportar CSV</button>
+    <div class="hero-result">
+      <div class="hero-kicker">análisis completo</div>
+      <h2 class="hero-title">
+        encontramos <span class="hero-number">${contactable.length}</span> clientes potenciales
+      </h2>
+      <p class="hero-sub">${escapeHtml(mix)} · analizados con scoring IA y listos para outreach</p>
     </div>
     ${renderCampaignPanel(data.leads)}
   `;
 
-  const tbody = wrap.querySelector("tbody");
-  data.leads.forEach((lead, i) => {
-    tbody.appendChild(renderRow(lead, i));
-  });
-
-  wrap.querySelector(".export-btn").onclick = () => downloadCSV(data.leads);
   wireCampaignPanel(wrap, data.leads);
 
   messagesEl.appendChild(wrap);
   messagesEl.scrollTop = messagesEl.scrollHeight;
 }
 
+function prettifyMix(cat) {
+  if (!cat) return "otros";
+  const map = {
+    "coffee shop": "cafeterías de especialidad",
+    "cafeteria": "cafeterías",
+    "cafe": "cafés",
+    "bakery": "panaderías",
+    "restaurant": "restaurantes",
+    "brunch restaurant": "brunch",
+  };
+  return map[cat] || cat;
+}
+
 function renderCampaignPanel(leads) {
-  // Filter out chains and leads without contact
   const contactable = leads.filter((l) => l.best_channel && l.best_channel !== "none" && !(l.breakdown && l.breakdown.is_chain));
   if (contactable.length === 0) return "";
 
@@ -186,71 +159,81 @@ function renderCampaignPanel(leads) {
 
   return `
     <div class="campaign">
-      <div class="campaign-header">
-        <div>
-          <div class="campaign-title">Ejecutá una campaña de outreach</div>
-          <div class="campaign-subtitle">nosotros nos encargamos — email, whatsapp y llamadas con agente de voz (elevenlabs + twilio)</div>
-        </div>
-        <div class="mode-toggle" role="tablist">
-          <button type="button" class="mode-btn active" data-mode="budget">💰 Budget</button>
-          <button type="button" class="mode-btn" data-mode="reach">📣 Alcance</button>
-        </div>
+      <div class="campaign-intro">
+        <div class="campaign-kicker">paso final</div>
+        <h3 class="campaign-title">¿cómo querés que los contactemos?</h3>
+        <p class="campaign-subtitle">elegí tu objetivo y nosotros armamos la estrategia más eficiente. nos encargamos de todo — email, whatsapp o llamadas con agente de voz.</p>
+      </div>
+
+      <div class="mode-cards">
+        <button type="button" class="mode-card active" data-mode="budget">
+          <div class="mode-card-icon">💰</div>
+          <div class="mode-card-title">por budget</div>
+          <div class="mode-card-desc">"tengo $X — maximizá cuántos clientes contacto"</div>
+        </button>
+        <button type="button" class="mode-card" data-mode="reach">
+          <div class="mode-card-icon">📣</div>
+          <div class="mode-card-title">por alcance</div>
+          <div class="mode-card-desc">"quiero llegar a los negocios más grandes — aunque cueste más"</div>
+        </button>
       </div>
 
       <div class="campaign-body">
         <div class="slider-row" data-slider-mode="budget">
           <label class="slider-label">
-            Budget total
+            <span>¿cuánto querés invertir?</span>
             <span class="slider-value"><span class="slider-unit">USD</span><span class="slider-number">$${defaultBudget}</span></span>
           </label>
           <input type="range" class="slider" min="1" max="${maxBudget}" value="${defaultBudget}" step="1">
-          <div class="slider-hint">arrastrá para elegir cuánto querés invertir — priorizamos canales más baratos primero (email → whatsapp → phone)</div>
         </div>
 
         <div class="slider-row hidden" data-slider-mode="reach">
           <label class="slider-label">
-            Min reach score
-            <span class="slider-value"><span class="slider-number">0</span></span>
+            <span>¿qué tamaño mínimo de negocio?</span>
+            <span class="slider-value"><span class="slider-number">0</span><span class="slider-unit">visitas/mes</span></span>
           </label>
           <input type="range" class="slider" min="0" max="1" value="0" step="1">
-          <div class="slider-hint">arrastrá para filtrar solo negocios grandes — priorizamos los de mayor impacto, aunque cuesten más contactar</div>
         </div>
 
-        <div class="preview">
-          <div class="preview-stat">
-            <div class="preview-label">Vamos a contactar</div>
-            <div class="preview-value"><span class="pv-leads">—</span><span class="unit">leads</span></div>
+        <div class="plan-card">
+          <div class="plan-headline">
+            <span class="plan-phrase">vamos a contactar</span>
+            <span class="plan-number pv-leads">—</span>
+            <span class="plan-phrase">negocios</span>
           </div>
-          <div class="preview-divider"></div>
-          <div class="preview-stat">
-            <div class="preview-label">Costo total</div>
-            <div class="preview-value">$<span class="pv-cost">—</span><span class="unit">USD</span></div>
+          <div class="plan-grid">
+            <div class="plan-stat">
+              <div class="plan-label">Costo total</div>
+              <div class="plan-value">$<span class="pv-cost">—</span> <span class="unit">USD</span></div>
+            </div>
+            <div class="plan-stat">
+              <div class="plan-label">Alcance mensual</div>
+              <div class="plan-value"><span class="pv-reach">—</span> <span class="unit">personas</span></div>
+            </div>
+            <div class="plan-stat">
+              <div class="plan-label">Mercado potencial</div>
+              <div class="plan-value">$<span class="pv-tam">—</span> <span class="unit">ARS / mes</span></div>
+            </div>
+            <div class="plan-stat">
+              <div class="plan-label">ROI estimado</div>
+              <div class="plan-value plan-roi"><span class="pv-roi">—</span>x</div>
+            </div>
           </div>
-          <div class="preview-divider"></div>
-          <div class="preview-stat">
-            <div class="preview-label">Alcance</div>
-            <div class="preview-value"><span class="pv-reach">—</span><span class="unit">personas</span></div>
-          </div>
-          <div class="preview-divider"></div>
-          <div class="preview-stat">
-            <div class="preview-label">TAM mensual</div>
-            <div class="preview-value">$<span class="pv-tam">—</span><span class="unit">ARS</span></div>
-          </div>
-          <div class="preview-divider"></div>
-          <div class="preview-stat">
-            <div class="preview-label">ROI est.</div>
-            <div class="preview-value"><span class="pv-roi">—</span><span class="unit">x</span></div>
+
+          <div class="plan-strategy">
+            <div class="plan-strategy-label">estrategia</div>
+            <div class="plan-strategy-breakdown">
+              <span class="strategy-item strategy-email"><span class="strategy-num pv-ch-email">0</span> por email</span>
+              <span class="strategy-sep">·</span>
+              <span class="strategy-item strategy-whatsapp"><span class="strategy-num pv-ch-whatsapp">0</span> por whatsapp</span>
+              <span class="strategy-sep">·</span>
+              <span class="strategy-item strategy-phone"><span class="strategy-num pv-ch-phone">0</span> con llamada de agente IA</span>
+            </div>
           </div>
         </div>
 
-        <div class="channel-breakdown">
-          <span class="cb-item channel-email"><span class="cb-dot"></span>email <span class="cb-count" data-ch="email">0</span></span>
-          <span class="cb-item channel-whatsapp"><span class="cb-dot"></span>whatsapp <span class="cb-count" data-ch="whatsapp">0</span></span>
-          <span class="cb-item channel-phone"><span class="cb-dot"></span>phone <span class="cb-count" data-ch="phone">0</span></span>
-        </div>
-
-        <button type="button" class="execute-btn">🚀 Ejecutar campaña</button>
-        <div class="execute-note">al ejecutar, nuestro equipo lanza la campaña en tu nombre. te avisamos por mail cuando esté en curso.</div>
+        <button type="button" class="execute-btn">lanzar campaña →</button>
+        <div class="execute-note">sin compromiso · recibís un reporte con resultados en 48–72 hs</div>
       </div>
     </div>
   `;
@@ -260,14 +243,14 @@ function wireCampaignPanel(root, leads) {
   const contactable = leads.filter((l) => l.best_channel && l.best_channel !== "none" && !(l.breakdown && l.breakdown.is_chain));
   if (contactable.length === 0) return;
 
-  // Configure reach slider max from data
-  const maxReach = Math.max(...contactable.map((l) => l.reach_score || 0));
+  // Reach slider usa monthly_visitors_est (más intuitivo que reach_score)
+  const maxVisits = Math.max(...contactable.map((l) => l.monthly_visitors_est || 0));
   const reachSlider = root.querySelector('[data-slider-mode="reach"] .slider');
-  if (reachSlider) reachSlider.max = maxReach;
+  if (reachSlider) reachSlider.max = maxVisits;
 
   let mode = "budget";
 
-  const modeBtns = root.querySelectorAll(".mode-btn");
+  const modeBtns = root.querySelectorAll(".mode-card");
   const sliderRows = root.querySelectorAll(".slider-row");
   modeBtns.forEach((b) => {
     b.onclick = () => {
@@ -296,11 +279,11 @@ function wireCampaignPanel(root, leads) {
       }
       return { picked, budget };
     } else {
-      const minReach = Number(root.querySelector('[data-slider-mode="reach"] .slider').value);
-      root.querySelector('[data-slider-mode="reach"] .slider-number').textContent = formatNum(minReach);
+      const minVisits = Number(root.querySelector('[data-slider-mode="reach"] .slider').value);
+      root.querySelector('[data-slider-mode="reach"] .slider-number').textContent = formatNum(minVisits);
       const picked = [...contactable]
-        .filter((l) => (l.reach_score || 0) >= minReach)
-        .sort((a, b) => (b.reach_score || 0) - (a.reach_score || 0));
+        .filter((l) => (l.monthly_visitors_est || 0) >= minVisits)
+        .sort((a, b) => (b.monthly_visitors_est || 0) - (a.monthly_visitors_est || 0));
       return { picked };
     }
   }
@@ -322,9 +305,9 @@ function wireCampaignPanel(root, leads) {
     // Channel breakdown
     const byCh = { email: 0, whatsapp: 0, phone: 0 };
     picked.forEach((l) => { if (byCh[l.best_channel] !== undefined) byCh[l.best_channel]++; });
-    root.querySelectorAll(".cb-count").forEach((el) => {
-      el.textContent = byCh[el.dataset.ch] || 0;
-    });
+    root.querySelector(".pv-ch-email").textContent = byCh.email;
+    root.querySelector(".pv-ch-whatsapp").textContent = byCh.whatsapp;
+    root.querySelector(".pv-ch-phone").textContent = byCh.phone;
 
     root._selectedLeads = picked;
   }
@@ -333,16 +316,32 @@ function wireCampaignPanel(root, leads) {
 
   root.querySelector(".execute-btn").onclick = () => {
     const picked = root._selectedLeads || [];
-    if (picked.length === 0) {
-      alert("Ajustá el slider — no hay leads seleccionados.");
-      return;
-    }
+    if (picked.length === 0) return;
     const byCh = { email: 0, whatsapp: 0, phone: 0 };
     picked.forEach((l) => { byCh[l.best_channel] = (byCh[l.best_channel] || 0) + 1; });
     const cost = picked.reduce((s, l) => s + (l.cost_per_contact_usd || 0), 0);
-    const summary = `Campaña encolada:\n\n${picked.length} leads\n  · ${byCh.email} por email\n  · ${byCh.whatsapp} por whatsapp\n  · ${byCh.phone} por llamada (ElevenLabs)\n\nCosto total: $${cost.toFixed(2)} USD\n\nNuestro equipo la lanza en tu nombre y te avisamos cuando esté en curso.`;
-    alert(summary);
+    showCampaignLaunched(root, picked.length, cost, byCh);
   };
+}
+
+function showCampaignLaunched(root, n, cost, byCh) {
+  const campaign = root.querySelector(".campaign");
+  campaign.innerHTML = `
+    <div class="launched">
+      <div class="launched-icon">🚀</div>
+      <div class="launched-kicker">campaña lanzada</div>
+      <h3 class="launched-title">estamos contactando a tus ${n} clientes potenciales</h3>
+      <div class="launched-grid">
+        <div class="launched-stat"><span class="launched-num">${byCh.email}</span><span class="launched-label">emails personalizados</span></div>
+        <div class="launched-stat"><span class="launched-num">${byCh.whatsapp}</span><span class="launched-label">mensajes whatsapp</span></div>
+        <div class="launched-stat"><span class="launched-num">${byCh.phone}</span><span class="launched-label">llamadas con agente IA</span></div>
+      </div>
+      <div class="launched-footer">
+        <div class="launched-cost">inversión total <strong>$${cost.toFixed(2)} USD</strong></div>
+        <div class="launched-next">recibís el reporte con respuestas y reuniones agendadas en <strong>48–72 hs</strong> por mail.</div>
+      </div>
+    </div>
+  `;
 }
 
 function renderRow(lead, i) {
