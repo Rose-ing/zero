@@ -82,8 +82,16 @@ function renderEmpty() {
   mainEl.innerHTML = `<div class="dash-empty"><p class="dash-empty-title">creá un proyecto para empezar</p><p class="dash-empty-sub">usá el chat o hacé click en "+ proyecto"</p></div>`;
 }
 
+function renameProject(proj) {
+  const name = prompt("Nombre del proyecto:", proj.name);
+  if (!name || !name.trim() || name.trim() === proj.name) return;
+  proj.name = name.trim();
+  saveStore(store);
+  render();
+}
+
 function renderProjectDash(proj) {
-  let html = `<div class="dash-header"><div><div class="dash-title">${esc(proj.name)}</div><div class="dash-subtitle">${proj.campaigns.length} campaña${proj.campaigns.length !== 1 ? "s" : ""}</div></div></div>`;
+  let html = `<div class="dash-header"><div><div class="dash-title">${esc(proj.name)} <button class="btn-edit" data-action="rename" title="renombrar">✎</button></div><div class="dash-subtitle">${proj.campaigns.length} campaña${proj.campaigns.length !== 1 ? "s" : ""}</div></div></div>`;
   if (proj.campaigns.length === 0) {
     html += `<div class="dash-empty" style="height:auto;padding:60px 0"><p class="dash-empty-title">sin campañas</p><p class="dash-empty-sub">buscá leads desde el chat para crear una</p></div>`;
   } else {
@@ -106,6 +114,8 @@ function renderProjectDash(proj) {
     html += `</div>`;
   }
   mainEl.innerHTML = html;
+  const renameBtn = mainEl.querySelector('[data-action="rename"]');
+  if (renameBtn) renameBtn.onclick = (e) => { e.stopPropagation(); renameProject(proj); };
   mainEl.querySelectorAll(".campaign-card").forEach(el => {
     el.onclick = () => { store.activeCampaignId = el.dataset.cid; saveStore(store); render(); };
   });
@@ -382,19 +392,27 @@ function toggleProjectDropdown() {
   let html = "";
   for (const p of store.projects) {
     const active = p.id === store.activeProjectId;
-    html += `<div class="dropdown-item${active ? " active" : ""}" data-pid="${p.id}"><span>${esc(p.name)}</span><span class="badge">${p.campaigns.length} camp.</span></div>`;
+    html += `<div class="dropdown-item${active ? " active" : ""}" data-pid="${p.id}"><span>${esc(p.name)}</span><div class="dropdown-right"><span class="badge">${p.campaigns.length} camp.</span><button class="btn-dd-edit" data-rename="${p.id}" title="renombrar">✎</button></div></div>`;
   }
   if (store.projects.length === 0) html = `<div class="dropdown-item" style="color:var(--text-muted);cursor:default">sin proyectos</div>`;
   dd.innerHTML = html;
   dd.classList.add("open");
 
   dd.querySelectorAll("[data-pid]").forEach(el => {
-    el.onclick = () => {
+    el.onclick = (e) => {
+      if (e.target.closest("[data-rename]")) return;
       store.activeProjectId = el.dataset.pid;
       store.activeCampaignId = null;
       saveStore(store);
       dd.classList.remove("open");
       render();
+    };
+  });
+  dd.querySelectorAll("[data-rename]").forEach(el => {
+    el.onclick = (e) => {
+      e.stopPropagation();
+      const p = store.projects.find(p => p.id === el.dataset.rename);
+      if (p) { renameProject(p); dd.classList.remove("open"); }
     };
   });
 }
