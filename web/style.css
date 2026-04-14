@@ -1,0 +1,151 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: #fafafa;
+  color: #1a1a1a;
+  height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#chat {
+  width: 100%;
+  max-width: 720px;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border-left: 1px solid #e5e5e5;
+  border-right: 1px solid #e5e5e5;
+}
+
+#messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+#messages:empty::before {
+  content: "Hola, soy el asistente de Zero. Preguntame sobre productos, pedidos o clientes.";
+  color: #999;
+  font-size: 14px;
+  text-align: center;
+  margin: auto;
+}
+
+.msg {
+  max-width: 85%;
+  padding: 10px 14px;
+  border-radius: 12px;
+  font-size: 14px;
+  line-height: 1.5;
+  word-wrap: break-word;
+}
+
+.msg.user {
+  align-self: flex-end;
+  background: #1a1a1a;
+  color: #fff;
+  border-bottom-right-radius: 4px;
+}
+
+.msg.assistant {
+  align-self: flex-start;
+  background: #f0f0f0;
+  color: #1a1a1a;
+  border-bottom-left-radius: 4px;
+}
+
+.msg.assistant p { margin-bottom: 8px; }
+.msg.assistant p:last-child { margin-bottom: 0; }
+.msg.assistant ul, .msg.assistant ol { margin: 4px 0 8px 20px; }
+.msg.assistant strong { font-weight: 600; }
+.msg.assistant code {
+  background: #e0e0e0;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 13px;
+}
+.msg.assistant table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0;
+  font-size: 13px;
+}
+.msg.assistant th, .msg.assistant td {
+  border: 1px solid #d0d0d0;
+  padding: 6px 8px;
+  text-align: left;
+}
+.msg.assistant th {
+  background: #e8e8e8;
+  font-weight: 600;
+}
+
+.msg.error {
+  align-self: center;
+  background: #fee;
+  color: #c00;
+  font-size: 13px;
+}
+
+.typing {
+  align-self: flex-start;
+  padding: 10px 14px;
+  font-size: 13px;
+  color: #999;
+}
+
+#form {
+  display: flex;
+  gap: 8px;
+  padding: 16px 20px;
+  border-top: 1px solid #e5e5e5;
+  background: #fff;
+}
+
+#input {
+  flex: 1;
+  padding: 10px 14px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+#input:focus {
+  border-color: #1a1a1a;
+}
+
+#send-btn {
+  padding: 10px 14px;
+  background: #1a1a1a;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.15s;
+}
+
+#send-btn:hover { opacity: 0.8; }
+#send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+@media (max-width: 720px) {
+  #chat {
+    border: none;
+  }
+}
