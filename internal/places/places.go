@@ -11,18 +11,51 @@ import (
 )
 
 type Lead struct {
-	PlaceID     string  `json:"place_id"`
-	Name        string  `json:"name"`
-	Address     string  `json:"address"`
-	Phone       string  `json:"phone"`
-	Website     string  `json:"website"`
-	MapsURL     string  `json:"maps_url"`
-	Rating      float64 `json:"rating"`
-	Reviews     int     `json:"reviews"`
-	PriceLevel  string  `json:"price_level"`
-	PrimaryType string  `json:"primary_type"`
-	Lat         float64 `json:"lat"`
-	Lng         float64 `json:"lng"`
+	PlaceID     string     `json:"place_id"`
+	Name        string     `json:"name"`
+	Address     string     `json:"address"`
+	Phone       string     `json:"phone"`
+	Website     string     `json:"website"`
+	MapsURL     string     `json:"maps_url"`
+	Rating      float64    `json:"rating"`
+	Reviews     int        `json:"reviews"`
+	PriceLevel  string     `json:"price_level"`
+	PrimaryType string     `json:"primary_type"`
+	Lat         float64    `json:"lat"`
+	Lng         float64    `json:"lng"`
+	Score       int        `json:"score,omitempty"`
+	Breakdown   *Breakdown `json:"breakdown,omitempty"`
+	Enrichment  *Enrichment `json:"enrichment,omitempty"`
+
+	// Campos finales consumibles por outreach
+	ID                  string  `json:"id"`
+	Category            string  `json:"category"`
+	Followers           int     `json:"followers"`
+	MonthlyVisitorsEst  int     `json:"monthly_visitors_est"`
+	BestChannel         string  `json:"best_channel"`          // email | whatsapp | phone | instagram
+	ContactValue        string  `json:"contact_value"`         // el valor concreto del canal elegido
+	EstimatedTicketARS  int     `json:"estimated_ticket_ars"`  // ticket estimado en ARS
+}
+
+type Breakdown struct {
+	Fit         int      `json:"fit"`
+	Contact     int      `json:"contact"`
+	Health      int      `json:"health"`
+	Likelihood  int      `json:"likelihood"`
+	Flags       []string `json:"flags"`
+	IsChain     bool     `json:"is_chain"`
+	ChainReason string   `json:"chain_reason,omitempty"`
+	LLMReason   string   `json:"llm_reason,omitempty"`
+}
+
+type Enrichment struct {
+	Email         string `json:"email,omitempty"`
+	WhatsApp      string `json:"whatsapp,omitempty"`
+	Instagram     string `json:"instagram,omitempty"`
+	IGFollowers   int    `json:"ig_followers,omitempty"`
+	IGBio         string `json:"ig_bio,omitempty"`
+	WebsiteTitle  string `json:"website_title,omitempty"`
+	WebsiteSample string `json:"website_sample,omitempty"`
 }
 
 type SearchParams struct {

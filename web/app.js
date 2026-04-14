@@ -58,12 +58,14 @@ async function runIntakeTurn() {
 }
 
 async function runSearch(params) {
-  const typing = showTyping("Buscando en Google Maps...");
+  const typing = showTyping("Buscando, calificando y enriqueciendo leads...");
+  // Usa el primer mensaje del usuario como contexto del producto
+  const productContext = (conversation.find((m) => m.role === "user") || {}).content || "";
   try {
     const res = await fetch("/api/search", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(params),
+      body: JSON.stringify({ ...params, product_context: productContext }),
     });
     const data = await res.json();
     typing.remove();
@@ -110,12 +112,16 @@ function renderResults(data) {
       <thead>
         <tr>
           <th>#</th>
+          <th>Score</th>
           <th>Nombre</th>
-          <th>Rating</th>
-          <th>Reviews</th>
-          <th>Teléfono</th>
-          <th>Dirección</th>
-          <th>Web</th>
+          <th>Categoría</th>
+          <th>Rating / Reviews</th>
+          <th>Price</th>
+          <th>Visitas/mes</th>
+          <th>Seguidores</th>
+          <th>Mejor canal</th>
+          <th>Ticket est. (ARS)</th>
+          <th>Por qué</th>
         </tr>
       </thead>
       <tbody></tbody>
@@ -123,20 +129,30 @@ function renderResults(data) {
     const tbody = table.querySelector("tbody");
     data.leads.forEach((lead, i) => {
       const tr = document.createElement("tr");
-      const website = lead.website
-        ? `<a href="${lead.website}" target="_blank" rel="noopener">link</a>`
-        : "—";
+      const b = lead.breakdown || {};
+      const scoreClass = scoreBadgeClass(lead.score || 0);
+      const chainTag = b.is_chain ? `<span class="tag tag-chain" title="${escapeHtml(b.chain_reason || '')}">cadena</span>` : "";
       const maps = lead.maps_url
         ? `<a href="${lead.maps_url}" target="_blank" rel="noopener">${escapeHtml(lead.name)}</a>`
         : escapeHtml(lead.name);
+      const reason = b.llm_reason
+        ? escapeHtml(b.llm_reason)
+        : (b.flags && b.flags.length ? b.flags.map(escapeHtml).join(" · ") : "—");
+      const breakdownAttr = `Fit ${b.fit||0} · Contact ${b.contact||0} · Health ${b.health||0} · Likelihood ${b.likelihood||0}`;
+      const price = formatPrice(lead.price_level);
+      const channel = renderChannel(lead.best_channel, lead.contact_value);
       tr.innerHTML = `
         <td>${i + 1}</td>
-        <td>${maps}</td>
-        <td>${lead.rating || "—"}</td>
-        <td>${lead.reviews || 0}</td>
-        <td>${escapeHtml(lead.phone || "—")}</td>
-        <td>${escapeHtml(lead.address || "")}</td>
-        <td>${website}</td>
+        <td><span class="score-badge ${scoreClass}" title="${breakdownAttr}">${lead.score || 0}</span>${chainTag}</td>
+        <td>${maps}<div class="lead-addr">${escapeHtml(lead.address || "")}</div></td>
+        <td>${escapeHtml(lead.category || "—")}</td>
+        <td>${lead.rating || "—"} · ${formatNum(lead.reviews || 0)}</td>
+        <td>${price}</td>
+        <td>${formatNum(lead.monthly_visitors_est || 0)}</td>
+        <td>${lead.followers ? formatNum(lead.followers) : "—"}</td>
+        <td>${channel}</td>
+        <td>${lead.estimated_ticket_ars ? "$" + formatNum(lead.estimated_ticket_ars) : "—"}</td>
+        <td class="reason-cell">${reason}</td>
       `;
       tbody.appendChild(tr);
     });
@@ -154,7 +170,11 @@ function renderResults(data) {
 }
 
 function downloadCSV(leads) {
-  const headers = ["name", "rating", "reviews", "phone", "address", "website", "maps_url", "place_id"];
+  const headers = [
+    "id", "name", "category", "address", "rating", "reviews", "price_level",
+    "followers", "monthly_visitors_est", "best_channel", "contact_value",
+    "estimated_ticket_ars", "score", "phone", "website", "maps_url",
+  ];
   const rows = leads.map((l) =>
     headers.map((h) => `"${String(l[h] ?? "").replace(/"/g, '""')}"`).join(",")
   );
@@ -192,6 +212,42 @@ function showTyping(text) {
 function setBusy(busy) {
   sendBtn.disabled = busy;
   input.disabled = busy;
+}
+
+function formatPrice(p) {
+  if (!p) return "—";
+  const map = {
+    PRICE_LEVEL_FREE: "gratis",
+    PRICE_LEVEL_INEXPENSIVE: "$",
+    PRICE_LEVEL_MODERATE: "$$",
+    PRICE_LEVEL_EXPENSIVE: "$$$",
+    PRICE_LEVEL_VERY_EXPENSIVE: "$$$$",
+  };
+  return map[p] || "—";
+}
+
+function renderChannel(channel, value) {
+  if (!channel || channel === "none" || !value) return "—";
+  const safe = escapeHtml(value);
+  const icons = { email: "📧", whatsapp: "💬", phone: "📞", instagram: "📸" };
+  const icon = icons[channel] || "•";
+  let linked = safe;
+  if (channel === "email") linked = `<a href="mailto:${safe}">${safe}</a>`;
+  else if (channel === "whatsapp") linked = `<a href="https://wa.me/${safe.replace(/[^\d+]/g, '')}" target="_blank">${safe}</a>`;
+  else if (channel === "phone") linked = `<a href="tel:${safe.replace(/\s/g, '')}">${safe}</a>`;
+  else if (channel === "instagram") linked = `<a href="https://instagram.com/${safe.replace('@','')}" target="_blank">${safe}</a>`;
+  return `<span class="channel-tag channel-${channel}">${icon} ${channel}</span><div class="channel-val">${linked}</div>`;
+}
+
+function scoreBadgeClass(n) {
+  if (n >= 75) return "score-high";
+  if (n >= 55) return "score-mid";
+  if (n >= 35) return "score-low";
+  return "score-drop";
+}
+
+function formatNum(n) {
+  return new Intl.NumberFormat("es-AR").format(n);
 }
 
 function escapeHtml(s) {

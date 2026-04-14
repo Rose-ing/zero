@@ -221,6 +221,70 @@ body {
   opacity: 0.85;
 }
 
+.score-badge {
+  display: inline-block;
+  min-width: 32px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-weight: 700;
+  font-size: 12px;
+  text-align: center;
+  color: #fff;
+  cursor: help;
+}
+
+.score-high { background: #16a34a; }
+.score-mid  { background: #ca8a04; }
+.score-low  { background: #ea580c; }
+.score-drop { background: #9ca3af; }
+
+.tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  font-size: 10px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.tag-chain {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.lead-addr {
+  font-size: 10px;
+  color: #888;
+  margin-top: 2px;
+}
+
+.reason-cell {
+  font-size: 11px;
+  color: #555;
+  max-width: 200px;
+}
+
+.channel-tag {
+  display: inline-block;
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.channel-email     { background: #dbeafe; color: #1e40af; }
+.channel-whatsapp  { background: #dcfce7; color: #166534; }
+.channel-phone     { background: #f3e8ff; color: #6b21a8; }
+.channel-instagram { background: #fce7f3; color: #9d174d; }
+
+.channel-val {
+  font-size: 11px;
+  margin-top: 2px;
+  color: #333;
+}
+
 @media (max-width: 720px) {
   #chat {
     border: none;

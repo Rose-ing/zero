@@ -7,7 +7,9 @@ import (
 	"os"
 
 	"github.com/Rose-ing/zero/internal/agent"
+	"github.com/Rose-ing/zero/internal/enrich"
 	"github.com/Rose-ing/zero/internal/places"
+	"github.com/Rose-ing/zero/internal/scoring"
 )
 
 type chatRequest struct {
@@ -29,10 +31,11 @@ type intakeResponse struct {
 }
 
 type searchRequest struct {
-	BusinessType string  `json:"business_type"`
-	Location     string  `json:"location"`
-	MinRating    float64 `json:"min_rating,omitempty"`
-	MinReviews   int     `json:"min_reviews,omitempty"`
+	BusinessType   string  `json:"business_type"`
+	Location       string  `json:"location"`
+	MinRating      float64 `json:"min_rating,omitempty"`
+	MinReviews     int     `json:"min_reviews,omitempty"`
+	ProductContext string  `json:"product_context,omitempty"`
 }
 
 type searchResponse struct {
@@ -137,5 +140,38 @@ func handleSearch(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 500, errorResponse{Error: "error buscando en Google Maps"})
 		return
 	}
+
+	// 1. Score básico + chain detection
+	leads = scoring.ScoreAll(leads)
+
+	// 2. Sort inicial por score para que enrichment + LLM vayan a los mejores
+	sortByScore(leads)
+
+	// 3. Enrichment (web + IG) para los top 30 no-cadenas
+	leads = enrich.EnrichAll(leads, 30)
+
+	// 4. LLM scoring con Haiku para los top 30 no-cadenas
+	product := req.ProductContext
+	if product == "" {
+		product = "producto/servicio B2B genérico"
+	}
+	leads = scoring.ScoreWithLLM(leads, 30, product)
+
+	// 5. Finalize: id, category, followers, best_channel, contact_value, ticket
+	leads = scoring.Finalize(leads)
+
+	// 6. Re-sort final con scores actualizados
+	sortByScore(leads)
+
 	writeJSON(w, 200, searchResponse{Params: params, Leads: leads, Count: len(leads)})
+}
+
+func sortByScore(leads []places.Lead) {
+	for i := 0; i < len(leads); i++ {
+		for j := i + 1; j < len(leads); j++ {
+			if leads[j].Score > leads[i].Score {
+				leads[i], leads[j] = leads[j], leads[i]
+			}
+		}
+	}
 }
