@@ -31,8 +31,38 @@ func Finalize(leads []places.Lead) []places.Lead {
 
 		// Elegir mejor canal de contacto
 		l.BestChannel, l.ContactValue = pickBestChannel(l)
+
+		// Costo de contactar este lead por su mejor canal
+		l.CostPerContactUSD = contactCost(l.BestChannel)
+
+		// Reach score: reviews + visitantes/10 (normaliza órdenes de magnitud)
+		l.ReachScore = l.Reviews + l.MonthlyVisitorsEst/10
+
+		// ROI estimado: ticket USD / costo de contacto
+		// (aproximamos 1 USD = 1000 ARS para abril 2026)
+		if l.CostPerContactUSD > 0 {
+			ticketUSD := float64(l.EstimatedTicketARS) / 1000.0
+			l.ROIEstimate = ticketUSD / l.CostPerContactUSD
+		}
 	}
 	return leads
+}
+
+// contactCost devuelve costo en USD de un contacto por canal.
+// Parámetros según spec:
+// - email: $0.001 fijo (SendGrid/Resend)
+// - whatsapp: $0.05 (Meta API + plantilla)
+// - phone: $0.08/min × 2min (ElevenLabs) + $0.015/min × 2min (Twilio) = $0.19
+func contactCost(channel string) float64 {
+	switch channel {
+	case "email":
+		return 0.001
+	case "whatsapp":
+		return 0.05
+	case "phone":
+		return 0.19
+	}
+	return 0
 }
 
 // pickBestChannel: prioridad Email > WhatsApp > Phone.

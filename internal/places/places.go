@@ -34,6 +34,9 @@ type Lead struct {
 	BestChannel         string  `json:"best_channel"`          // email | whatsapp | phone
 	ContactValue        string  `json:"contact_value"`         // el valor concreto del canal elegido
 	EstimatedTicketARS  int     `json:"estimated_ticket_ars"`  // ticket estimado en ARS
+	CostPerContactUSD   float64 `json:"cost_per_contact_usd"`  // costo de contactar este lead por su mejor canal
+	ReachScore          int     `json:"reach_score"`           // reviews + visitantes/10 — proxy de alcance/impacto
+	ROIEstimate         float64 `json:"roi_estimate"`          // ticket_usd / cost_per_contact
 }
 
 type Breakdown struct {
