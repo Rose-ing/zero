@@ -3,22 +3,40 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Zero</title>
+  <title>Zero — Lead intelligence</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800&family=Geist+Mono:wght@400;500&display=swap">
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-  <div id="chat">
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark"></div>
+      <span class="brand-name">zero</span>
+    </div>
+    <div class="topbar-meta">
+      <span class="status-dot"></span>
+      <span class="status-text">live · google maps + haiku 4.5</span>
+    </div>
+  </header>
+
+  <main id="chat">
     <div id="messages"></div>
+  </main>
+
+  <footer class="composer">
     <form id="form">
-      <input id="input" type="text" placeholder="Pegá la URL de tu producto o describí qué vendés..." autocomplete="off" autofocus>
-      <button type="submit" id="send-btn">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <line x1="22" y1="2" x2="11" y2="13"></line>
-          <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+      <input id="input" type="text" placeholder="pegá la URL de tu producto o describí a quién le querés vender…" autocomplete="off" autofocus>
+      <button type="submit" id="send-btn" aria-label="enviar">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M5 12h14M13 6l6 6-6 6"/>
         </svg>
       </button>
     </form>
-  </div>
+    <div class="composer-hint">zero encuentra, califica y prioriza clientes para tu negocio en segundos</div>
+  </footer>
+
   <script src="/app.js"></script>
 </body>
 </html>

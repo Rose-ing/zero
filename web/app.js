@@ -19,7 +19,7 @@ form.addEventListener("submit", async (e) => {
 
 async function runIntakeTurn() {
   setBusy(true);
-  const typing = showTyping("Pensando...");
+  const typing = showTyping("analizando…");
 
   try {
     const res = await fetch("/api/intake", {
@@ -32,17 +32,14 @@ async function runIntakeTurn() {
     typing.remove();
 
     if (!res.ok) {
-      addMessage("error", data.error || "Error del servidor");
+      addMessage("error", data.error || "error del servidor");
       return;
     }
 
     if (data.done && data.search_params) {
       const summary = formatSearchSummary(data.search_params);
-      addMessage("assistant", `Perfecto, voy a buscar **${summary}**.`);
-      conversation.push({
-        role: "assistant",
-        content: `Voy a buscar ${summary}.`,
-      });
+      addMessage("assistant", `perfecto, voy a buscar **${summary}**.`);
+      conversation.push({ role: "assistant", content: `Voy a buscar ${summary}.` });
       await runSearch(data.search_params);
     } else if (data.reply) {
       addMessage("assistant", data.reply);
@@ -50,7 +47,7 @@ async function runIntakeTurn() {
     }
   } catch (err) {
     typing.remove();
-    addMessage("error", "No se pudo conectar con el servidor");
+    addMessage("error", "no se pudo conectar con el servidor");
   } finally {
     setBusy(false);
     input.focus();
@@ -58,8 +55,7 @@ async function runIntakeTurn() {
 }
 
 async function runSearch(params) {
-  const typing = showTyping("Buscando, calificando y enriqueciendo leads...");
-  // Usa el primer mensaje del usuario como contexto del producto
+  const typing = showTyping("buscando · calificando · enriqueciendo · scoring con haiku…");
   const productContext = (conversation.find((m) => m.role === "user") || {}).content || "";
   try {
     const res = await fetch("/api/search", {
@@ -71,16 +67,15 @@ async function runSearch(params) {
     typing.remove();
 
     if (!res.ok) {
-      addMessage("error", data.error || "Error en la búsqueda");
+      addMessage("error", data.error || "error en la búsqueda");
       return;
     }
 
     renderResults(data);
-    const resultsNote = `Encontré ${data.count} resultados.`;
-    conversation.push({ role: "assistant", content: resultsNote });
+    conversation.push({ role: "assistant", content: `${data.count} resultados.` });
   } catch (err) {
     typing.remove();
-    addMessage("error", "No se pudo ejecutar la búsqueda");
+    addMessage("error", "no se pudo ejecutar la búsqueda");
   }
 }
 
@@ -93,86 +88,125 @@ function formatSearchSummary(p) {
 
 function renderResults(data) {
   const wrap = document.createElement("div");
-  wrap.className = "msg assistant results";
-
-  const header = document.createElement("div");
-  header.className = "results-header";
-  header.innerHTML = `<strong>${data.count}</strong> resultados encontrados`;
-  wrap.appendChild(header);
+  wrap.className = "msg results";
 
   if (data.count === 0) {
-    const empty = document.createElement("div");
-    empty.className = "results-empty";
-    empty.textContent = "No se encontraron negocios. Probá con otra zona o tipo de comercio.";
-    wrap.appendChild(empty);
-  } else {
-    const table = document.createElement("table");
-    table.className = "leads-table";
-    table.innerHTML = `
-      <thead>
-        <tr>
-          <th>#</th>
-          <th>Score</th>
-          <th>Nombre</th>
-          <th>Categoría</th>
-          <th>Rating / Reviews</th>
-          <th>Price</th>
-          <th>Visitas/mes</th>
-          <th>Seguidores</th>
-          <th>Mejor canal</th>
-          <th>Ticket est. (ARS)</th>
-          <th>Por qué</th>
-        </tr>
-      </thead>
-      <tbody></tbody>
+    wrap.innerHTML = `
+      <div class="results-header">
+        <div class="results-header-left">
+          <span class="results-count">0</span>
+          <span class="results-subtitle">resultados</span>
+        </div>
+      </div>
+      <div class="results-empty">no se encontraron negocios. probá con otra zona o tipo de comercio.</div>
     `;
-    const tbody = table.querySelector("tbody");
-    data.leads.forEach((lead, i) => {
-      const tr = document.createElement("tr");
-      const b = lead.breakdown || {};
-      const scoreClass = scoreBadgeClass(lead.score || 0);
-      const chainTag = b.is_chain ? `<span class="tag tag-chain" title="${escapeHtml(b.chain_reason || '')}">cadena</span>` : "";
-      const maps = lead.maps_url
-        ? `<a href="${lead.maps_url}" target="_blank" rel="noopener">${escapeHtml(lead.name)}</a>`
-        : escapeHtml(lead.name);
-      const reason = b.llm_reason
-        ? escapeHtml(b.llm_reason)
-        : (b.flags && b.flags.length ? b.flags.map(escapeHtml).join(" · ") : "—");
-      const breakdownAttr = `Fit ${b.fit||0} · Contact ${b.contact||0} · Health ${b.health||0} · Likelihood ${b.likelihood||0}`;
-      const price = formatPrice(lead.price_level);
-      const channel = renderChannel(lead.best_channel, lead.contact_value);
-      tr.innerHTML = `
-        <td>${i + 1}</td>
-        <td><span class="score-badge ${scoreClass}" title="${breakdownAttr}">${lead.score || 0}</span>${chainTag}</td>
-        <td>${maps}<div class="lead-addr">${escapeHtml(lead.address || "")}</div></td>
-        <td>${escapeHtml(lead.category || "—")}</td>
-        <td>${lead.rating || "—"} · ${formatNum(lead.reviews || 0)}</td>
-        <td>${price}</td>
-        <td>${formatNum(lead.monthly_visitors_est || 0)}</td>
-        <td>${lead.followers ? formatNum(lead.followers) : "—"}</td>
-        <td>${channel}</td>
-        <td>${lead.estimated_ticket_ars ? "$" + formatNum(lead.estimated_ticket_ars) : "—"}</td>
-        <td class="reason-cell">${reason}</td>
-      `;
-      tbody.appendChild(tr);
-    });
-    wrap.appendChild(table);
-
-    const exportBtn = document.createElement("button");
-    exportBtn.className = "export-btn";
-    exportBtn.textContent = "Descargar CSV";
-    exportBtn.onclick = () => downloadCSV(data.leads);
-    wrap.appendChild(exportBtn);
+    messagesEl.appendChild(wrap);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+    return;
   }
+
+  // Calculate stats
+  const ready = data.leads.filter((l) => l.score >= 55 && !(l.breakdown && l.breakdown.is_chain)).length;
+  const avgScore = Math.round(
+    data.leads.reduce((s, l) => s + (l.score || 0), 0) / data.leads.length
+  );
+  const totalTAM = data.leads.reduce((s, l) => s + (l.estimated_ticket_ars || 0), 0);
+
+  wrap.innerHTML = `
+    <div class="results-header">
+      <div class="results-header-left">
+        <span class="results-count">${data.count}</span>
+        <span class="results-subtitle">clientes potenciales</span>
+      </div>
+      <div class="results-subtitle">ordenado por score ↓</div>
+    </div>
+    <div class="stats-strip">
+      <div class="stat">
+        <div class="stat-label">ready to contact</div>
+        <div class="stat-value">${ready}<span class="unit">/ ${data.count}</span></div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">avg score</div>
+        <div class="stat-value">${avgScore}<span class="unit">/100</span></div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">TAM mensual est.</div>
+        <div class="stat-value">$${formatNumCompact(totalTAM)}<span class="unit">ARS</span></div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">con contacto directo</div>
+        <div class="stat-value">${data.leads.filter((l) => l.best_channel === "email" || l.best_channel === "whatsapp").length}<span class="unit">leads</span></div>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table class="leads-table">
+        <thead>
+          <tr>
+            <th class="col-rank">#</th>
+            <th>Score</th>
+            <th>Negocio</th>
+            <th>Categoría</th>
+            <th>Rating · Reviews</th>
+            <th>Precio</th>
+            <th>Visitas/mes</th>
+            <th>Mejor canal</th>
+            <th>Ticket est.</th>
+            <th>Por qué</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div class="results-footer">
+      <div class="footer-note">${data.leads.filter(l => l.breakdown && l.breakdown.is_chain).length} cadenas detectadas · listas para derivar al agente de outreach</div>
+      <button class="export-btn" type="button">↓ Exportar CSV</button>
+    </div>
+  `;
+
+  const tbody = wrap.querySelector("tbody");
+  data.leads.forEach((lead, i) => {
+    tbody.appendChild(renderRow(lead, i));
+  });
+
+  wrap.querySelector(".export-btn").onclick = () => downloadCSV(data.leads);
 
   messagesEl.appendChild(wrap);
   messagesEl.scrollTop = messagesEl.scrollHeight;
 }
 
+function renderRow(lead, i) {
+  const tr = document.createElement("tr");
+  const b = lead.breakdown || {};
+  const scoreClass = scoreBadgeClass(lead.score || 0);
+  const chainTag = b.is_chain
+    ? `<span class="tag tag-chain" title="${escapeHtml(b.chain_reason || "")}">cadena</span>`
+    : "";
+  const maps = lead.maps_url
+    ? `<a href="${lead.maps_url}" target="_blank" rel="noopener" class="lead-name">${escapeHtml(lead.name)}</a>`
+    : `<span class="lead-name">${escapeHtml(lead.name)}</span>`;
+  const reason = b.llm_reason
+    ? escapeHtml(b.llm_reason)
+    : (b.flags && b.flags.length ? b.flags.map(escapeHtml).join(" · ") : "—");
+  const breakdownAttr = `Fit ${b.fit || 0} · Contact ${b.contact || 0} · Health ${b.health || 0} · Likelihood ${b.likelihood || 0}`;
+  tr.innerHTML = `
+    <td class="col-rank">${String(i + 1).padStart(2, "0")}</td>
+    <td><span class="score-badge ${scoreClass}" title="${breakdownAttr}">${lead.score || 0}</span>${chainTag}</td>
+    <td>${maps}<div class="lead-addr">${escapeHtml(lead.address || "")}</div></td>
+    <td><span class="category-pill">${escapeHtml(lead.category || "—")}</span></td>
+    <td>${lead.rating ? `<strong style="color:var(--text)">${lead.rating}</strong>` : "—"} <span style="color:var(--text-muted)">·</span> <span class="visits">${formatNum(lead.reviews || 0)}</span></td>
+    <td><span class="price">${formatPrice(lead.price_level)}</span></td>
+    <td class="visits">${formatNum(lead.monthly_visitors_est || 0)}</td>
+    <td>${renderChannel(lead.best_channel, lead.contact_value)}</td>
+    <td>${lead.estimated_ticket_ars ? `<span class="ticket">$${formatNum(lead.estimated_ticket_ars)}<span class="ticket-unit">ARS</span></span>` : "—"}</td>
+    <td class="reason-cell">${reason}</td>
+  `;
+  return tr;
+}
+
 function downloadCSV(leads) {
   const headers = [
     "id", "name", "category", "address", "rating", "reviews", "price_level",
-    "followers", "monthly_visitors_est", "best_channel", "contact_value",
+    "monthly_visitors_est", "best_channel", "contact_value",
     "estimated_ticket_ars", "score", "phone", "website", "maps_url",
   ];
   const rows = leads.map((l) =>
@@ -203,7 +237,7 @@ function addMessage(role, content) {
 function showTyping(text) {
   const div = document.createElement("div");
   div.className = "typing";
-  div.textContent = text || "Pensando...";
+  div.textContent = text || "pensando…";
   messagesEl.appendChild(div);
   messagesEl.scrollTop = messagesEl.scrollHeight;
   return div;
@@ -212,6 +246,23 @@ function showTyping(text) {
 function setBusy(busy) {
   sendBtn.disabled = busy;
   input.disabled = busy;
+}
+
+function scoreBadgeClass(n) {
+  if (n >= 75) return "score-high";
+  if (n >= 55) return "score-mid";
+  if (n >= 35) return "score-low";
+  return "score-drop";
+}
+
+function formatNum(n) {
+  return new Intl.NumberFormat("es-AR").format(n);
+}
+
+function formatNumCompact(n) {
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1).replace(/\.0$/, "") + "M";
+  if (n >= 1_000) return (n / 1_000).toFixed(1).replace(/\.0$/, "") + "K";
+  return String(n);
 }
 
 function formatPrice(p) {
@@ -227,27 +278,15 @@ function formatPrice(p) {
 }
 
 function renderChannel(channel, value) {
-  if (!channel || channel === "none" || !value) return "—";
+  if (!channel || channel === "none" || !value) {
+    return `<span style="color:var(--text-muted);font-size:11px">sin contacto</span>`;
+  }
   const safe = escapeHtml(value);
-  const icons = { email: "📧", whatsapp: "💬", phone: "📞", instagram: "📸" };
-  const icon = icons[channel] || "•";
   let linked = safe;
   if (channel === "email") linked = `<a href="mailto:${safe}">${safe}</a>`;
-  else if (channel === "whatsapp") linked = `<a href="https://wa.me/${safe.replace(/[^\d+]/g, '')}" target="_blank">${safe}</a>`;
-  else if (channel === "phone") linked = `<a href="tel:${safe.replace(/\s/g, '')}">${safe}</a>`;
-  else if (channel === "instagram") linked = `<a href="https://instagram.com/${safe.replace('@','')}" target="_blank">${safe}</a>`;
-  return `<span class="channel-tag channel-${channel}">${icon} ${channel}</span><div class="channel-val">${linked}</div>`;
-}
-
-function scoreBadgeClass(n) {
-  if (n >= 75) return "score-high";
-  if (n >= 55) return "score-mid";
-  if (n >= 35) return "score-low";
-  return "score-drop";
-}
-
-function formatNum(n) {
-  return new Intl.NumberFormat("es-AR").format(n);
+  else if (channel === "whatsapp") linked = `<a href="https://wa.me/${safe.replace(/[^\d+]/g, "")}" target="_blank">${safe}</a>`;
+  else if (channel === "phone") linked = `<a href="tel:${safe.replace(/\s/g, "")}">${safe}</a>`;
+  return `<div class="channel-cell"><span class="channel-tag channel-${channel}">${channel}</span><span class="channel-val">${linked}</span></div>`;
 }
 
 function escapeHtml(s) {
@@ -259,22 +298,10 @@ function escapeHtml(s) {
 }
 
 function renderMarkdown(text) {
-  text = text.replace(/^(\|.+\|)\n(\|[-| :]+\|)\n((?:\|.+\|\n?)+)/gm, (_, header, sep, body) => {
-    const headers = header.split("|").filter(Boolean).map((h) => `<th>${h.trim()}</th>`).join("");
-    const rows = body.trim().split("\n").map((row) => {
-      const cells = row.split("|").filter(Boolean).map((c) => `<td>${c.trim()}</td>`).join("");
-      return `<tr>${cells}</tr>`;
-    }).join("");
-    return `<table><thead><tr>${headers}</tr></thead><tbody>${rows}</tbody></table>`;
-  });
   text = text.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
   text = text.replace(/\*(.+?)\*/g, "<em>$1</em>");
   text = text.replace(/`(.+?)`/g, "<code>$1</code>");
-  text = text.replace(/^- (.+)$/gm, "<li>$1</li>");
-  text = text.replace(/((?:<li>.*<\/li>\n?)+)/g, "<ul>$1</ul>");
   text = text.replace(/\n{2,}/g, "</p><p>");
   text = `<p>${text}</p>`;
-  text = text.replace(/<p>\s*<(ul|table)/g, "<$1");
-  text = text.replace(/<\/(ul|table)>\s*<\/p>/g, "</$1>");
   return text;
 }

@@ -30,9 +30,8 @@ type Lead struct {
 	// Campos finales consumibles por outreach
 	ID                  string  `json:"id"`
 	Category            string  `json:"category"`
-	Followers           int     `json:"followers"`
 	MonthlyVisitorsEst  int     `json:"monthly_visitors_est"`
-	BestChannel         string  `json:"best_channel"`          // email | whatsapp | phone | instagram
+	BestChannel         string  `json:"best_channel"`          // email | whatsapp | phone
 	ContactValue        string  `json:"contact_value"`         // el valor concreto del canal elegido
 	EstimatedTicketARS  int     `json:"estimated_ticket_ars"`  // ticket estimado en ARS
 }
@@ -51,9 +50,6 @@ type Breakdown struct {
 type Enrichment struct {
 	Email         string `json:"email,omitempty"`
 	WhatsApp      string `json:"whatsapp,omitempty"`
-	Instagram     string `json:"instagram,omitempty"`
-	IGFollowers   int    `json:"ig_followers,omitempty"`
-	IGBio         string `json:"ig_bio,omitempty"`
 	WebsiteTitle  string `json:"website_title,omitempty"`
 	WebsiteSample string `json:"website_sample,omitempty"`
 }

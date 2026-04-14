@@ -19,11 +19,6 @@ func Finalize(leads []places.Lead) []places.Lead {
 		// category: usar primary_type normalizado
 		l.Category = prettifyCategory(l.PrimaryType)
 
-		// followers desde enrichment
-		if l.Enrichment != nil {
-			l.Followers = l.Enrichment.IGFollowers
-		}
-
 		// Fallback de visitantes: reviews * 50 (ratio histórico ~2% de visitantes deja review)
 		if l.MonthlyVisitorsEst == 0 && l.Reviews > 0 {
 			l.MonthlyVisitorsEst = l.Reviews * 50
@@ -40,9 +35,9 @@ func Finalize(leads []places.Lead) []places.Lead {
 	return leads
 }
 
-// pickBestChannel: prioridad Email > WhatsApp > Phone > Instagram (DM).
-// Email y WhatsApp permiten envío masivo personalizado con más tiempo para
-// pitch, phone es sincrónico (mejor para cierre), IG es último recurso.
+// pickBestChannel: prioridad Email > WhatsApp > Phone.
+// Email y WhatsApp permiten envío personalizado con más tiempo para el pitch,
+// phone es sincrónico (mejor para cierre pero más caro por ElevenLabs+Twilio).
 func pickBestChannel(l *places.Lead) (channel, value string) {
 	e := l.Enrichment
 	if e != nil {
@@ -55,9 +50,6 @@ func pickBestChannel(l *places.Lead) (channel, value string) {
 	}
 	if l.Phone != "" {
 		return "phone", l.Phone
-	}
-	if e != nil && e.Instagram != "" {
-		return "instagram", "@" + e.Instagram
 	}
 	return "none", ""
 }

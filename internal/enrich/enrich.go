@@ -4,7 +4,6 @@ import (
 	"io"
 	"net/http"
 	"regexp"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -13,40 +12,23 @@ import (
 )
 
 var (
-	emailRE   = regexp.MustCompile(`(?i)[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,}`)
-	whatsRE   = regexp.MustCompile(`(?i)(?:wa\.me/|api\.whatsapp\.com/send\?phone=|whatsapp[:\s]*)(\+?\d[\d\s\-]{6,})`)
-	igHandleRE = regexp.MustCompile(`(?i)(?:instagram\.com/|ig:\s*@)([a-zA-Z0-9._]{2,30})`)
-	// Handles inválidos que suelen capturarse por accidente
-	invalidIGHandles = map[string]bool{
-		"rsrc":     true,
-		"rsrc.php": true,
-		"embed":    true,
-		"p":        true,
-		"reel":     true,
-		"explore":  true,
-		"accounts": true,
-		"static":   true,
-		"stories":  true,
-		"tv":       true,
-		"direct":   true,
-	}
-	titleRE   = regexp.MustCompile(`(?is)<title[^>]*>(.*?)</title>`)
-	ogDescRE  = regexp.MustCompile(`(?i)<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["']`)
-	descRE    = regexp.MustCompile(`(?i)<meta[^>]+name=["']description["'][^>]+content=["']([^"']+)["']`)
-	// Followers from IG profile page (very brittle, but works for public profiles)
-	igFollowersRE = regexp.MustCompile(`"edge_followed_by":\{"count":(\d+)\}`)
-	igBioRE       = regexp.MustCompile(`"biography":"([^"]*)"`)
+	emailRE  = regexp.MustCompile(`(?i)[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,}`)
+	whatsRE  = regexp.MustCompile(`(?i)(?:wa\.me/|api\.whatsapp\.com/send\?phone=|whatsapp[:\s]*)(\+?\d[\d\s\-]{6,})`)
+	titleRE  = regexp.MustCompile(`(?is)<title[^>]*>(.*?)</title>`)
+	ogDescRE = regexp.MustCompile(`(?i)<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["']`)
+	descRE   = regexp.MustCompile(`(?i)<meta[^>]+name=["']description["'][^>]+content=["']([^"']+)["']`)
 )
 
 const (
-	httpTimeout  = 8 * time.Second
-	maxBody      = 300 * 1024 // 300 KB
-	maxParallel  = 8
-	userAgent    = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+	httpTimeout = 8 * time.Second
+	maxBody     = 300 * 1024 // 300 KB
+	maxParallel = 8
+	userAgent   = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
 )
 
-// EnrichAll runs website + IG enrichment on the top N leads in parallel.
-// Leads without a score of >= minScore or flagged as chain are skipped.
+// EnrichAll fetches each lead's website (if any) in parallel and extracts
+// contact info (email, whatsapp) + page title/description.
+// Leads tagged as chain are skipped.
 func EnrichAll(leads []places.Lead, topN int) []places.Lead {
 	client := &http.Client{Timeout: httpTimeout}
 	sem := make(chan struct{}, maxParallel)
@@ -57,7 +39,10 @@ func EnrichAll(leads []places.Lead, topN int) []places.Lead {
 			break
 		}
 		if leads[i].Breakdown != nil && leads[i].Breakdown.IsChain {
-			continue // no vale la pena enriquecer cadenas
+			continue
+		}
+		if leads[i].Website == "" {
+			continue
 		}
 		wg.Add(1)
 		sem <- struct{}{}
@@ -72,69 +57,43 @@ func EnrichAll(leads []places.Lead, topN int) []places.Lead {
 }
 
 func enrichOne(client *http.Client, lead *places.Lead) {
+	html, err := fetchText(client, lead.Website)
+	if err != nil {
+		return
+	}
+
 	e := &places.Enrichment{}
-
-	// 1. Fetch website (if any)
-	if lead.Website != "" {
-		html, err := fetchText(client, lead.Website)
-		if err == nil {
-			if m := titleRE.FindStringSubmatch(html); len(m) > 1 {
-				e.WebsiteTitle = strings.TrimSpace(stripTags(m[1]))
-			}
-			if m := ogDescRE.FindStringSubmatch(html); len(m) > 1 {
-				e.WebsiteSample = strings.TrimSpace(m[1])
-			} else if m := descRE.FindStringSubmatch(html); len(m) > 1 {
-				e.WebsiteSample = strings.TrimSpace(m[1])
-			}
-			if m := emailRE.FindString(html); m != "" && !isNoisyEmail(m) {
-				e.Email = m
-			}
-			if m := whatsRE.FindStringSubmatch(html); len(m) > 1 {
-				e.WhatsApp = cleanPhone(m[1])
-			}
-			if m := igHandleRE.FindStringSubmatch(html); len(m) > 1 {
-				handle := strings.TrimSuffix(m[1], "/")
-				handle = strings.TrimSuffix(handle, ".php")
-				if !invalidIGHandles[strings.ToLower(handle)] && !strings.Contains(handle, ".") {
-					e.Instagram = handle
-				}
-			}
-		}
+	if m := titleRE.FindStringSubmatch(html); len(m) > 1 {
+		e.WebsiteTitle = strings.TrimSpace(stripTags(m[1]))
+	}
+	if m := ogDescRE.FindStringSubmatch(html); len(m) > 1 {
+		e.WebsiteSample = strings.TrimSpace(m[1])
+	} else if m := descRE.FindStringSubmatch(html); len(m) > 1 {
+		e.WebsiteSample = strings.TrimSpace(m[1])
+	}
+	if m := emailRE.FindString(html); m != "" && !isNoisyEmail(m) {
+		e.Email = m
+	}
+	if m := whatsRE.FindStringSubmatch(html); len(m) > 1 {
+		e.WhatsApp = cleanPhone(m[1])
 	}
 
-	// 2. Scrape Instagram profile (if we found a handle or can guess one)
-	if e.Instagram != "" {
-		igURL := "https://www.instagram.com/" + e.Instagram + "/"
-		html, err := fetchText(client, igURL)
-		if err == nil {
-			if m := igFollowersRE.FindStringSubmatch(html); len(m) > 1 {
-				n, _ := strconv.Atoi(m[1])
-				e.IGFollowers = n
-			}
-			if m := igBioRE.FindStringSubmatch(html); len(m) > 1 {
-				e.IGBio = unescape(m[1])
-			}
-		}
+	if e.Email == "" && e.WhatsApp == "" && e.WebsiteTitle == "" {
+		return
 	}
+	lead.Enrichment = e
 
-	// Attach only if we got anything
-	if e.Email != "" || e.Instagram != "" || e.WebsiteTitle != "" || e.WhatsApp != "" {
-		lead.Enrichment = e
-		// Bump contact score if we pulled a direct contact channel
-		if lead.Breakdown != nil {
-			bonus := 0
-			if e.Email != "" {
-				bonus += 10
-			}
-			if e.WhatsApp != "" {
-				bonus += 10
-			}
-			if e.Instagram != "" {
-				bonus += 5
-			}
-			lead.Breakdown.Contact = clamp(lead.Breakdown.Contact+bonus, 0, 100)
-			lead.Score = recomputeTotal(lead.Breakdown)
+	// Bump contact score if we pulled a direct contact channel
+	if lead.Breakdown != nil {
+		bonus := 0
+		if e.Email != "" {
+			bonus += 10
 		}
+		if e.WhatsApp != "" {
+			bonus += 10
+		}
+		lead.Breakdown.Contact = clamp(lead.Breakdown.Contact+bonus, 0, 100)
+		lead.Score = recomputeTotal(lead.Breakdown)
 	}
 }
 
@@ -177,13 +136,6 @@ func isNoisyEmail(s string) bool {
 		}
 	}
 	return false
-}
-
-func unescape(s string) string {
-	s = strings.ReplaceAll(s, `\n`, " ")
-	s = strings.ReplaceAll(s, `\"`, `"`)
-	s = strings.ReplaceAll(s, `\/`, "/")
-	return s
 }
 
 func clamp(v, lo, hi int) int {

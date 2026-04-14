@@ -100,12 +100,9 @@ func askHaiku(client *http.Client, apiKey string, lead *places.Lead, product str
 	if lead.Enrichment != nil {
 		e := lead.Enrichment
 		enrichStr = fmt.Sprintf(
-			"\nweb_title: %s\nweb_desc: %s\nig: @%s (%d followers)\nig_bio: %s",
+			"\nweb_title: %s\nweb_desc: %s",
 			truncate(e.WebsiteTitle, 120),
 			truncate(e.WebsiteSample, 200),
-			e.Instagram,
-			e.IGFollowers,
-			truncate(e.IGBio, 200),
 		)
 	}
 
