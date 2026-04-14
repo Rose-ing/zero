@@ -314,28 +314,221 @@ function wireCampaignPanel(root, leads) {
     const byCh = { email: 0, whatsapp: 0, phone: 0 };
     picked.forEach((l) => { byCh[l.best_channel] = (byCh[l.best_channel] || 0) + 1; });
     const cost = picked.reduce((s, l) => s + (l.cost_per_contact_usd || 0), 0);
-    showCampaignLaunched(root, picked.length, cost, byCh);
+    showCampaignLaunched(root, picked, cost, byCh);
   };
 }
 
-function showCampaignLaunched(root, n, cost, byCh) {
+function showCampaignLaunched(root, picked, cost, byCh) {
+  const n = picked.length;
   const campaign = root.querySelector(".campaign");
   campaign.innerHTML = `
-    <div class="launched">
-      <div class="launched-icon">🚀</div>
-      <div class="launched-kicker">campaña lanzada</div>
-      <h3 class="launched-title">estamos contactando a tus ${n} clientes potenciales</h3>
-      <div class="launched-grid">
-        <div class="launched-stat"><span class="launched-num">${byCh.email}</span><span class="launched-label">emails personalizados</span></div>
-        <div class="launched-stat"><span class="launched-num">${byCh.whatsapp}</span><span class="launched-label">mensajes whatsapp</span></div>
-        <div class="launched-stat"><span class="launched-num">${byCh.phone}</span><span class="launched-label">llamadas con agente IA</span></div>
+    <div class="tracker">
+      <div class="tracker-header">
+        <div>
+          <div class="tracker-kicker"><span class="live-dot"></span>campaña en curso · en tiempo real</div>
+          <h3 class="tracker-title">contactando a ${n} negocios</h3>
+        </div>
+        <div class="tracker-invested">
+          <div class="tracker-invested-label">inversión</div>
+          <div class="tracker-invested-value">$${cost.toFixed(2)} <span>USD</span></div>
+        </div>
       </div>
-      <div class="launched-footer">
-        <div class="launched-cost">inversión total <strong>$${cost.toFixed(2)} USD</strong></div>
-        <div class="launched-next">recibís el reporte con respuestas y reuniones agendadas en <strong>48–72 hs</strong> por mail.</div>
+
+      <div class="tracker-metrics">
+        <div class="metric">
+          <div class="metric-label">Contactados</div>
+          <div class="metric-value"><span data-metric="contacted">0</span><span class="metric-of">/${n}</span></div>
+          <div class="metric-bar"><div class="metric-bar-fill" data-bar="contacted" style="width:0%"></div></div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Respuestas</div>
+          <div class="metric-value" data-metric="replies">0</div>
+          <div class="metric-sub" data-sub="reply-rate">—</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Interesados</div>
+          <div class="metric-value interested" data-metric="interested">0</div>
+          <div class="metric-sub" data-sub="interest-rate">—</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Reuniones agendadas</div>
+          <div class="metric-value meetings" data-metric="meetings">0</div>
+          <div class="metric-sub">con tu equipo comercial</div>
+        </div>
+      </div>
+
+      <div class="tracker-channels">
+        <div class="channel-progress channel-email">
+          <div class="cp-icon">📧</div>
+          <div class="cp-body">
+            <div class="cp-head"><span class="cp-name">email</span><span class="cp-count"><span data-channel-done="email">0</span>/${byCh.email}</span></div>
+            <div class="cp-bar"><div class="cp-bar-fill" data-channel-bar="email" style="width:0%"></div></div>
+          </div>
+        </div>
+        <div class="channel-progress channel-whatsapp">
+          <div class="cp-icon">💬</div>
+          <div class="cp-body">
+            <div class="cp-head"><span class="cp-name">whatsapp</span><span class="cp-count"><span data-channel-done="whatsapp">0</span>/${byCh.whatsapp}</span></div>
+            <div class="cp-bar"><div class="cp-bar-fill" data-channel-bar="whatsapp" style="width:0%"></div></div>
+          </div>
+        </div>
+        <div class="channel-progress channel-phone">
+          <div class="cp-icon">📞</div>
+          <div class="cp-body">
+            <div class="cp-head"><span class="cp-name">llamadas IA</span><span class="cp-count"><span data-channel-done="phone">0</span>/${byCh.phone}</span></div>
+            <div class="cp-bar"><div class="cp-bar-fill" data-channel-bar="phone" style="width:0%"></div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tracker-feed-wrap">
+        <div class="feed-header">
+          <div class="feed-title">actividad en vivo</div>
+          <div class="feed-status"><span class="live-dot"></span><span data-feed-status>iniciando…</span></div>
+        </div>
+        <div class="feed" data-feed></div>
       </div>
     </div>
   `;
+
+  simulateCampaign(campaign, picked, byCh);
+}
+
+function simulateCampaign(root, picked, byCh) {
+  const feed = root.querySelector("[data-feed]");
+  const state = {
+    contacted: 0,
+    replies: 0,
+    interested: 0,
+    meetings: 0,
+    byChannelDone: { email: 0, whatsapp: 0, phone: 0 },
+  };
+  const n = picked.length;
+
+  // Plan de eventos: por cada lead, orquestamos send → reply? → interested? → meeting?
+  const events = [];
+  picked.forEach((lead, idx) => {
+    const baseDelay = 800 + idx * 450 + Math.random() * 600;
+    const ch = lead.best_channel;
+    // 1. Envío / llamada
+    events.push({
+      at: baseDelay,
+      type: ch === "phone" ? "call_start" : "send",
+      lead,
+    });
+    // 2. Posible completado
+    if (ch === "phone") {
+      events.push({ at: baseDelay + 2400 + Math.random() * 1800, type: "call_end", lead });
+    } else {
+      // ~40% respuesta
+      if (Math.random() < 0.4) {
+        events.push({ at: baseDelay + 3200 + Math.random() * 4000, type: "reply", lead });
+      }
+    }
+  });
+
+  // Eventos derivados post-reply/post-call
+  const extendedEvents = [...events];
+  events.forEach((e) => {
+    const interestedRoll = Math.random();
+    if (e.type === "reply" && interestedRoll < 0.55) {
+      extendedEvents.push({ at: e.at + 1500 + Math.random() * 2000, type: "interested", lead: e.lead });
+      if (Math.random() < 0.5) {
+        extendedEvents.push({ at: e.at + 3500 + Math.random() * 2000, type: "meeting", lead: e.lead });
+      }
+    }
+    if (e.type === "call_end" && interestedRoll < 0.35) {
+      extendedEvents.push({ at: e.at + 500, type: "interested", lead: e.lead });
+      if (Math.random() < 0.6) {
+        extendedEvents.push({ at: e.at + 2000 + Math.random() * 1500, type: "meeting", lead: e.lead });
+      }
+    }
+  });
+
+  extendedEvents.sort((a, b) => a.at - b.at);
+
+  const startTs = Date.now();
+  let lastAt = 0;
+
+  extendedEvents.forEach((ev) => {
+    setTimeout(() => {
+      const ch = ev.lead.best_channel;
+      const nm = ev.lead.name;
+      const ago = relTime((Date.now() - startTs) / 1000);
+
+      if (ev.type === "send") {
+        state.contacted++;
+        state.byChannelDone[ch]++;
+        pushFeed(feed, ch === "email" ? "📧" : "💬", `<strong>${escapeHtml(nm)}</strong> · ${ch === "email" ? "email enviado" : "mensaje whatsapp enviado"}`, ago);
+      } else if (ev.type === "call_start") {
+        pushFeed(feed, "📞", `llamando a <strong>${escapeHtml(nm)}</strong>…`, ago, "feed-item-pending");
+      } else if (ev.type === "call_end") {
+        state.contacted++;
+        state.byChannelDone.phone++;
+        pushFeed(feed, "✅", `llamada completada con <strong>${escapeHtml(nm)}</strong> · 2m 14s`, ago);
+      } else if (ev.type === "reply") {
+        state.replies++;
+        pushFeed(feed, "💬", `<strong>${escapeHtml(nm)}</strong> respondió`, ago);
+      } else if (ev.type === "interested") {
+        state.interested++;
+        if (!state.replies) state.replies++; // phone interested también cuenta
+        pushFeed(feed, "🔥", `<strong>${escapeHtml(nm)}</strong> está interesado`, ago, "feed-item-win");
+      } else if (ev.type === "meeting") {
+        state.meetings++;
+        pushFeed(feed, "📅", `reunión agendada con <strong>${escapeHtml(nm)}</strong>`, ago, "feed-item-win");
+      }
+      renderState(root, state, n, byCh);
+      lastAt = ev.at;
+    }, ev.at);
+  });
+
+  // Status final
+  setTimeout(() => {
+    root.querySelector("[data-feed-status]").textContent = `completa · ${state.replies} respuestas · ${state.meetings} reuniones`;
+    root.querySelector(".live-dot").classList.add("done");
+    pushFeed(feed, "🏁", `<strong>campaña completada</strong> · preparamos el reporte ejecutivo`, relTime((Date.now() - startTs) / 1000), "feed-item-done");
+  }, lastAt + 1200);
+}
+
+function renderState(root, state, n, byCh) {
+  root.querySelector('[data-metric="contacted"]').textContent = state.contacted;
+  root.querySelector('[data-metric="replies"]').textContent = state.replies;
+  root.querySelector('[data-metric="interested"]').textContent = state.interested;
+  root.querySelector('[data-metric="meetings"]').textContent = state.meetings;
+
+  root.querySelector('[data-bar="contacted"]').style.width = `${(state.contacted / n) * 100}%`;
+
+  const replyRate = state.contacted ? Math.round((state.replies / state.contacted) * 100) : 0;
+  const interestRate = state.replies ? Math.round((state.interested / state.replies) * 100) : 0;
+  root.querySelector('[data-sub="reply-rate"]').textContent = state.contacted ? `${replyRate}% tasa de respuesta` : "—";
+  root.querySelector('[data-sub="interest-rate"]').textContent = state.replies ? `${interestRate}% de respuestas` : "—";
+
+  Object.keys(state.byChannelDone).forEach((ch) => {
+    const done = state.byChannelDone[ch];
+    const total = byCh[ch] || 0;
+    root.querySelector(`[data-channel-done="${ch}"]`).textContent = done;
+    const pct = total > 0 ? (done / total) * 100 : 0;
+    root.querySelector(`[data-channel-bar="${ch}"]`).style.width = `${pct}%`;
+  });
+}
+
+function pushFeed(feed, icon, html, when, extraClass = "") {
+  const item = document.createElement("div");
+  item.className = `feed-item ${extraClass}`;
+  item.innerHTML = `
+    <div class="feed-icon">${icon}</div>
+    <div class="feed-text">${html}</div>
+    <div class="feed-time">${when}</div>
+  `;
+  feed.insertBefore(item, feed.firstChild);
+  // Limit to 40 items
+  while (feed.children.length > 40) feed.removeChild(feed.lastChild);
+}
+
+function relTime(secs) {
+  if (secs < 1) return "ahora";
+  if (secs < 60) return `hace ${Math.round(secs)}s`;
+  return `hace ${Math.round(secs / 60)}m`;
 }
 
 function renderRow(lead, i) {

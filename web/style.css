@@ -1008,7 +1008,354 @@ body::before {
   margin-top: 2px;
 }
 
-/* === Launched state === */
+/* === Campaign tracker (real-time) === */
+.tracker {
+  animation: fadeIn 0.4s ease-out;
+  padding: 4px 0;
+}
+
+.tracker-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 0 0 24px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.tracker-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 10px;
+  color: var(--success);
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-family: "Geist Mono", monospace;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--success);
+  box-shadow: 0 0 8px rgba(52, 211, 153, 0.8);
+  animation: livePulse 1.6s ease-in-out infinite;
+}
+.live-dot.done {
+  background: var(--text-muted);
+  box-shadow: none;
+  animation: none;
+}
+
+@keyframes livePulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(1.4); }
+}
+
+.tracker-title {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+}
+
+.tracker-invested {
+  text-align: right;
+}
+
+.tracker-invested-label {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-family: "Geist Mono", monospace;
+  margin-bottom: 3px;
+}
+
+.tracker-invested-value {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.tracker-invested-value span {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: "Geist Mono", monospace;
+  -webkit-text-fill-color: var(--text-muted);
+}
+
+/* Metrics */
+.tracker-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1px;
+  background: var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  margin-bottom: 24px;
+}
+
+.metric {
+  background: var(--bg-elev-2);
+  padding: 18px 18px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.metric-label {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-family: "Geist Mono", monospace;
+}
+
+.metric-value {
+  font-size: 32px;
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.metric-value.interested {
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.metric-value.meetings {
+  color: var(--success);
+}
+
+.metric-of {
+  font-size: 14px;
+  color: var(--text-muted);
+  font-weight: 400;
+  margin-left: 4px;
+  -webkit-text-fill-color: var(--text-muted);
+}
+
+.metric-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: "Geist Mono", monospace;
+}
+
+.metric-bar {
+  height: 3px;
+  background: var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-top: 2px;
+}
+
+.metric-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent) 0%, var(--accent-2) 100%);
+  transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Channels */
+.tracker-channels {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-bottom: 24px;
+}
+
+.channel-progress {
+  background: var(--bg-elev-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.cp-icon {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.cp-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cp-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 12px;
+}
+
+.cp-name {
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-family: "Geist Mono", monospace;
+  font-size: 10px;
+}
+
+.cp-count {
+  font-weight: 600;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+}
+
+.cp-bar {
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.cp-bar-fill {
+  height: 100%;
+  transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.channel-progress.channel-email .cp-bar-fill    { background: #60a5fa; }
+.channel-progress.channel-whatsapp .cp-bar-fill { background: #34d399; }
+.channel-progress.channel-phone .cp-bar-fill    { background: #a78bfa; }
+
+/* Activity feed */
+.tracker-feed-wrap {
+  background: var(--bg-elev-2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.feed-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-elev);
+}
+
+.feed-title {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-family: "Geist Mono", monospace;
+  font-weight: 600;
+}
+
+.feed-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-dim);
+  font-family: "Geist Mono", monospace;
+}
+
+.feed {
+  max-height: 380px;
+  overflow-y: auto;
+  padding: 4px 0;
+  scrollbar-width: thin;
+}
+
+.feed:empty::before {
+  content: "esperando primer evento…";
+  display: block;
+  text-align: center;
+  padding: 30px 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-family: "Geist Mono", monospace;
+}
+
+.feed-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  animation: feedIn 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.feed-item:last-child { border-bottom: none; }
+
+@keyframes feedIn {
+  from { opacity: 0; transform: translateX(-8px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.feed-icon {
+  font-size: 15px;
+  line-height: 1;
+  width: 22px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.feed-text {
+  flex: 1;
+  font-size: 13px;
+  color: var(--text-dim);
+  line-height: 1.4;
+}
+
+.feed-text strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.feed-time {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-family: "Geist Mono", monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  flex-shrink: 0;
+}
+
+.feed-item.feed-item-pending .feed-text {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.feed-item.feed-item-win {
+  background: linear-gradient(90deg, rgba(255, 99, 0, 0.06) 0%, transparent 100%);
+  border-left: 2px solid var(--accent);
+  padding-left: 14px;
+}
+
+.feed-item.feed-item-done {
+  background: linear-gradient(90deg, rgba(52, 211, 153, 0.08) 0%, transparent 100%);
+  border-left: 2px solid var(--success);
+  padding-left: 14px;
+  font-weight: 600;
+}
+
+@media (max-width: 900px) {
+  .tracker-metrics { grid-template-columns: repeat(2, 1fr); }
+  .tracker-channels { grid-template-columns: 1fr; }
+}
+
+/* === Launched state (legacy) === */
 .launched {
   text-align: center;
   padding: 20px 0;
