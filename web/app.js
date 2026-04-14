@@ -157,33 +157,33 @@ function renderCampaignPanel(leads) {
   const contactable = leads.filter((l) => l.best_channel && l.best_channel !== "none" && !(l.breakdown && l.breakdown.is_chain));
   if (contactable.length === 0) return "";
 
-  const maxBudget = Math.ceil(contactable.reduce((s, l) => s + (l.cost_per_contact_usd || 0), 0));
-  const totalReach = contactable.reduce((s, l) => s + (l.monthly_visitors_est || 0), 0);
-  const defaultBudget = Math.max(1, Math.min(20, Math.ceil(maxBudget / 3)));
+  const maxBudget = Math.ceil(contactable.reduce((s, l) => s + (l.cost_per_contact_usd || 0), 0) * 100) / 100;
+  const totalLeads = contactable.length;
+  const defaultLeads = Math.max(5, Math.ceil(totalLeads * 0.5));
 
   return `
     <div class="campaign">
       <div class="campaign-intro">
         <div class="campaign-kicker">paso final</div>
-        <h3 class="campaign-title">¿cuánto querés invertir para cuánto alcance?</h3>
-        <p class="campaign-subtitle">moveé cualquiera de las dos barras — van de la mano. nosotros armamos la estrategia más eficiente con tu presupuesto.</p>
+        <h3 class="campaign-title">¿a cuántos les querés vender?</h3>
+        <p class="campaign-subtitle">moveé cualquiera de las dos barras — van de la mano. cuántos negocios contactamos y cuánto te sale. nosotros armamos la estrategia más eficiente.</p>
       </div>
 
       <div class="campaign-body">
-        <div class="slider-row" data-slider-mode="budget">
+        <div class="slider-row" data-slider-mode="leads">
           <label class="slider-label">
-            <span>💰 budget</span>
-            <span class="slider-value"><span class="slider-unit">USD</span><span class="slider-number" data-budget-num>$${defaultBudget}</span></span>
+            <span>📣 negocios a contactar</span>
+            <span class="slider-value"><span class="slider-number" data-leads-num>${defaultLeads}</span><span class="slider-unit">de ${totalLeads}</span></span>
           </label>
-          <input type="range" class="slider" data-slider="budget" min="0.01" max="${maxBudget}" value="${defaultBudget}" step="0.01">
+          <input type="range" class="slider" data-slider="leads" min="1" max="${totalLeads}" value="${defaultLeads}" step="1">
         </div>
 
-        <div class="slider-row" data-slider-mode="reach">
+        <div class="slider-row" data-slider-mode="budget">
           <label class="slider-label">
-            <span>📣 alcance</span>
-            <span class="slider-value"><span class="slider-number" data-reach-num>0</span><span class="slider-unit">personas/mes</span></span>
+            <span>💰 inversión</span>
+            <span class="slider-value"><span class="slider-unit">USD</span><span class="slider-number" data-budget-num>$0</span></span>
           </label>
-          <input type="range" class="slider" data-slider="reach" min="0" max="${totalReach}" value="0" step="1000">
+          <input type="range" class="slider" data-slider="budget" min="0.01" max="${maxBudget}" value="${maxBudget}" step="0.01">
         </div>
 
         <div class="plan-card">
@@ -198,11 +198,11 @@ function renderCampaignPanel(leads) {
               <div class="plan-value">$<span class="pv-cost">—</span> <span class="unit">USD</span></div>
             </div>
             <div class="plan-stat">
-              <div class="plan-label">Alcance mensual</div>
-              <div class="plan-value"><span class="pv-reach">—</span> <span class="unit">personas</span></div>
+              <div class="plan-label">Costo por negocio</div>
+              <div class="plan-value">$<span class="pv-cpl">—</span> <span class="unit">USD</span></div>
             </div>
             <div class="plan-stat">
-              <div class="plan-label">Mercado potencial</div>
+              <div class="plan-label">Ventas potenciales</div>
               <div class="plan-value">$<span class="pv-tam">—</span> <span class="unit">ARS / mes</span></div>
             </div>
             <div class="plan-stat">
@@ -235,71 +235,58 @@ function wireCampaignPanel(root, leads) {
   if (contactable.length === 0) return;
 
   const budgetSlider = root.querySelector('[data-slider="budget"]');
-  const reachSlider = root.querySelector('[data-slider="reach"]');
-  let lockedSlider = null; // "budget" | "reach" — qué slider acaba de mover el usuario
+  const leadsSlider = root.querySelector('[data-slider="leads"]');
 
   // Estrategia única: ordenamos leads por ROI DESC (ticket por dólar invertido).
-  // Así "sumar más" siempre es razonable en ambos sentidos.
+  // El cliente siempre elige cuántos contactar — contactamos los N mejores.
   const sortedByROI = [...contactable].sort((a, b) => (b.roi_estimate || 0) - (a.roi_estimate || 0));
 
-  // Dado un budget, devuelve los leads que entran (greedy por ROI desc)
+  // Dado N, devuelve los N mejores leads
+  function pickByLeads(n) {
+    const picked = sortedByROI.slice(0, n);
+    const cost = picked.reduce((s, l) => s + (l.cost_per_contact_usd || 0), 0);
+    return { picked, cost };
+  }
+
+  // Dado un budget, cuántos leads entran (greedy por ROI desc)
   function pickByBudget(budget) {
     const picked = [];
     let spent = 0;
     for (const l of sortedByROI) {
       const c = l.cost_per_contact_usd || 0;
-      if (spent + c > budget + 0.0001) continue;
+      if (spent + c > budget + 0.0001) break;
       picked.push(l);
       spent += c;
     }
     return { picked, cost: spent };
   }
 
-  // Dado un reach target, devuelve los leads acumulados por ROI desc hasta alcanzarlo
-  function pickByReach(target) {
-    const picked = [];
-    let acc = 0;
-    for (const l of sortedByROI) {
-      if (acc >= target) break;
-      picked.push(l);
-      acc += l.monthly_visitors_est || 0;
-    }
-    return { picked, reach: acc };
-  }
+  leadsSlider.addEventListener("input", () => {
+    const n = Number(leadsSlider.value);
+    const { picked, cost } = pickByLeads(n);
+    budgetSlider.value = cost;
+    updateDisplay(picked, cost);
+  });
 
   budgetSlider.addEventListener("input", () => {
-    lockedSlider = "budget";
     const budget = Number(budgetSlider.value);
     const { picked, cost } = pickByBudget(budget);
-    // Actualizar reach slider al alcance resultante
-    const resultingReach = picked.reduce((s, l) => s + (l.monthly_visitors_est || 0), 0);
-    reachSlider.value = resultingReach;
-    updateDisplay(picked, cost, resultingReach);
+    leadsSlider.value = picked.length;
+    updateDisplay(picked, cost);
   });
 
-  reachSlider.addEventListener("input", () => {
-    lockedSlider = "reach";
-    const target = Number(reachSlider.value);
-    const { picked, reach } = pickByReach(target);
-    const resultingCost = picked.reduce((s, l) => s + (l.cost_per_contact_usd || 0), 0);
-    budgetSlider.value = resultingCost;
-    updateDisplay(picked, resultingCost, reach);
-  });
-
-  function updateDisplay(picked, cost, reach) {
+  function updateDisplay(picked, cost) {
     root.querySelector('[data-budget-num]').textContent = `$${cost.toFixed(2)}`;
-    root.querySelector('[data-reach-num]').textContent = formatNumCompact(reach);
-    renderStats(picked, cost, reach);
-  }
+    root.querySelector('[data-leads-num]').textContent = picked.length;
 
-  function renderStats(picked, cost, reach) {
     const tam = picked.reduce((s, l) => s + (l.estimated_ticket_ars || 0), 0);
     const tamUSD = tam / 1000;
     const roi = cost > 0 ? tamUSD / cost : 0;
+    const cpl = picked.length > 0 ? cost / picked.length : 0;
 
     root.querySelector(".pv-leads").textContent = picked.length;
     root.querySelector(".pv-cost").textContent = cost.toFixed(2);
-    root.querySelector(".pv-reach").textContent = formatNumCompact(reach);
+    root.querySelector(".pv-cpl").textContent = cpl.toFixed(2);
     root.querySelector(".pv-tam").textContent = formatNumCompact(tam);
     root.querySelector(".pv-roi").textContent = roi >= 1 ? roi.toFixed(1) : roi.toFixed(2);
 
@@ -313,11 +300,10 @@ function wireCampaignPanel(root, leads) {
   }
 
   function initial() {
-    const budget = Number(budgetSlider.value);
-    const { picked, cost } = pickByBudget(budget);
-    const resultingReach = picked.reduce((s, l) => s + (l.monthly_visitors_est || 0), 0);
-    reachSlider.value = resultingReach;
-    updateDisplay(picked, cost, resultingReach);
+    const n = Number(leadsSlider.value);
+    const { picked, cost } = pickByLeads(n);
+    budgetSlider.value = cost;
+    updateDisplay(picked, cost);
   }
 
   initial();
