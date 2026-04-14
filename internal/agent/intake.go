@@ -14,6 +14,7 @@ import (
 // (enough info gathered — caller should run the Places search).
 type IntakeResult struct {
 	Reply        string                 `json:"reply,omitempty"`
+	Options      []string               `json:"options,omitempty"`
 	SearchParams map[string]interface{} `json:"search_params,omitempty"`
 	Done         bool                   `json:"done"`
 }
@@ -51,18 +52,23 @@ type intakeResponse struct {
 const intakeSystemPrompt = `Sos el agente de intake de Zero, una plataforma que busca leads (clientes potenciales) de negocios en Google Maps para nuestros clientes.
 
 Tu rol:
-1. El usuario te va a decir qué producto/servicio vende (puede pegar una URL, un prompt libre, o describirlo).
+1. El usuario te va a decir qué producto/servicio vende.
 2. Tenés que hacer entre 2 y 4 preguntas cortas y puntuales para entender:
-   - Qué tipo de comercio/negocio es el cliente ideal (ej: "cafeterías", "gimnasios boutique", "restaurantes de sushi").
-   - En qué zona geográfica buscar (ciudad, barrio, radio).
-   - (Opcional) filtros de calidad: rating mínimo, cantidad mínima de reviews.
+   - Qué tipo de comercio/negocio es el cliente ideal.
+   - En qué zona geográfica buscar.
+   - (Opcional) filtros de calidad.
 3. Una vez que tengas CLARO el tipo de comercio y la zona, llamás a la tool "search_places" con los parámetros.
 
-Reglas:
-- Hacé UNA pregunta por turno, no varias juntas.
-- Preguntas cortas, en español rioplatense, tono amable pero directo.
-- Si el usuario ya dio info suficiente desde el primer mensaje (tipo de comercio + zona), no preguntes de más: ejecutá la tool directamente.
-- No inventes datos del producto del usuario. Si no entendés qué vende, preguntale.
+REGLA CRÍTICA — cómo preguntar:
+- NUNCA escribas preguntas como texto libre. SIEMPRE usá la tool "ask_clarifying_question" que te da opciones cliqueables para el usuario.
+- Pasale 3-5 opciones cortas (máximo 4 palabras cada una), concretas y mutuamente excluyentes.
+- La última opción SIEMPRE puede ser "otro — escribir" para que el usuario pueda escribir libre si ninguna le encaja.
+- Hacé UNA pregunta por turno.
+- Preguntas en español rioplatense, tono amable y directo.
+
+Cuándo NO preguntar:
+- Si el usuario ya dio info suficiente (tipo de comercio + zona) en su mensaje, NO preguntes de más: llamá a "search_places" directamente.
+- No inventes datos del producto del usuario.
 - Nunca menciones que sos una IA ni expliques tu proceso interno.`
 
 func runIntake(messages []Message) (*intakeResponse, error) {
@@ -71,7 +77,7 @@ func runIntake(messages []Message) (*intakeResponse, error) {
 		return nil, fmt.Errorf("ANTHROPIC_API_KEY no configurada")
 	}
 
-	tool := intakeTool{
+	searchTool := intakeTool{
 		Name:        "search_places",
 		Description: "Busca negocios reales en Google Maps según tipo de comercio y zona geográfica. Usar cuando tengas claro QUÉ busca el usuario y DÓNDE.",
 		InputSchema: map[string]interface{}{
@@ -98,12 +104,34 @@ func runIntake(messages []Message) (*intakeResponse, error) {
 		},
 	}
 
+	askTool := intakeTool{
+		Name:        "ask_clarifying_question",
+		Description: "Hacer UNA pregunta al usuario con 3-5 opciones cliqueables. SIEMPRE usá esta tool para preguntar — nunca escribas preguntas como texto libre.",
+		InputSchema: map[string]interface{}{
+			"type": "object",
+			"properties": map[string]interface{}{
+				"question": map[string]interface{}{
+					"type":        "string",
+					"description": "La pregunta, corta y concreta. Máximo 1 oración.",
+				},
+				"options": map[string]interface{}{
+					"type":        "array",
+					"description": "3 a 5 opciones cortas (máximo 4 palabras cada una). La última opción debería ser 'otro — escribir' para permitir texto libre.",
+					"items":       map[string]interface{}{"type": "string"},
+					"minItems":    3,
+					"maxItems":    5,
+				},
+			},
+			"required": []string{"question", "options"},
+		},
+	}
+
 	reqBody := intakeRequest{
 		Model:     "claude-sonnet-4-20250514",
 		MaxTokens: 1024,
 		System:    intakeSystemPrompt,
 		Messages:  messages,
-		Tools:     []intakeTool{tool},
+		Tools:     []intakeTool{searchTool, askTool},
 	}
 
 	body, err := json.Marshal(reqBody)
@@ -146,11 +174,25 @@ func Intake(messages []Message) (*IntakeResult, error) {
 	for _, block := range resp.Content {
 		switch block.Type {
 		case "text":
-			result.Reply = block.Text
+			if result.Reply == "" {
+				result.Reply = block.Text
+			}
 		case "tool_use":
-			if block.Name == "search_places" {
+			switch block.Name {
+			case "search_places":
 				result.SearchParams = block.Input
 				result.Done = true
+			case "ask_clarifying_question":
+				if q, ok := block.Input["question"].(string); ok {
+					result.Reply = q
+				}
+				if opts, ok := block.Input["options"].([]interface{}); ok {
+					for _, o := range opts {
+						if s, ok := o.(string); ok {
+							result.Options = append(result.Options, s)
+						}
+					}
+				}
 			}
 		}
 	}

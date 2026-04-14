@@ -228,6 +228,41 @@ body::before {
   padding: 8px 14px;
 }
 
+/* === Clickable options === */
+.options {
+  align-self: flex-start;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  max-width: 680px;
+  animation: fadeIn 0.3s ease-out;
+}
+
+.option-chip {
+  background: var(--bg-elev);
+  border: 1px solid var(--border-strong);
+  color: var(--text);
+  padding: 10px 16px;
+  border-radius: 20px;
+  font-size: 13.5px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  letter-spacing: -0.01em;
+  transition: all 0.15s;
+}
+
+.option-chip:hover {
+  border-color: var(--accent-border);
+  background: var(--accent-soft);
+  color: var(--accent);
+  transform: translateY(-1px);
+}
+
+.option-chip:active {
+  transform: translateY(0);
+}
+
 /* === Typing / Loading === */
 .typing {
   align-self: flex-start;

@@ -44,6 +44,9 @@ async function runIntakeTurn() {
     } else if (data.reply) {
       addMessage("assistant", data.reply);
       conversation.push({ role: "assistant", content: data.reply });
+      if (data.options && data.options.length) {
+        renderOptions(data.options);
+      }
     }
   } catch (err) {
     typing.remove();
@@ -155,44 +158,32 @@ function renderCampaignPanel(leads) {
   if (contactable.length === 0) return "";
 
   const maxBudget = Math.ceil(contactable.reduce((s, l) => s + (l.cost_per_contact_usd || 0), 0));
-  const defaultBudget = Math.max(5, Math.min(50, Math.ceil(maxBudget / 2)));
+  const totalReach = contactable.reduce((s, l) => s + (l.monthly_visitors_est || 0), 0);
+  const defaultBudget = Math.max(1, Math.min(20, Math.ceil(maxBudget / 3)));
 
   return `
     <div class="campaign">
       <div class="campaign-intro">
         <div class="campaign-kicker">paso final</div>
-        <h3 class="campaign-title">¿cómo querés que los contactemos?</h3>
-        <p class="campaign-subtitle">elegí tu objetivo y nosotros armamos la estrategia más eficiente. nos encargamos de todo — email, whatsapp o llamadas con agente de voz.</p>
-      </div>
-
-      <div class="mode-cards">
-        <button type="button" class="mode-card active" data-mode="budget">
-          <div class="mode-card-icon">💰</div>
-          <div class="mode-card-title">por budget</div>
-          <div class="mode-card-desc">"tengo $X — maximizá cuántos clientes contacto"</div>
-        </button>
-        <button type="button" class="mode-card" data-mode="reach">
-          <div class="mode-card-icon">📣</div>
-          <div class="mode-card-title">por alcance</div>
-          <div class="mode-card-desc">"quiero llegar a los negocios más grandes — aunque cueste más"</div>
-        </button>
+        <h3 class="campaign-title">¿cuánto querés invertir para cuánto alcance?</h3>
+        <p class="campaign-subtitle">moveé cualquiera de las dos barras — van de la mano. nosotros armamos la estrategia más eficiente con tu presupuesto.</p>
       </div>
 
       <div class="campaign-body">
         <div class="slider-row" data-slider-mode="budget">
           <label class="slider-label">
-            <span>¿cuánto querés invertir?</span>
-            <span class="slider-value"><span class="slider-unit">USD</span><span class="slider-number">$${defaultBudget}</span></span>
+            <span>💰 budget</span>
+            <span class="slider-value"><span class="slider-unit">USD</span><span class="slider-number" data-budget-num>$${defaultBudget}</span></span>
           </label>
-          <input type="range" class="slider" min="1" max="${maxBudget}" value="${defaultBudget}" step="1">
+          <input type="range" class="slider" data-slider="budget" min="0.01" max="${maxBudget}" value="${defaultBudget}" step="0.01">
         </div>
 
-        <div class="slider-row hidden" data-slider-mode="reach">
+        <div class="slider-row" data-slider-mode="reach">
           <label class="slider-label">
-            <span>¿qué tamaño mínimo de negocio?</span>
-            <span class="slider-value"><span class="slider-number">0</span><span class="slider-unit">visitas/mes</span></span>
+            <span>📣 alcance</span>
+            <span class="slider-value"><span class="slider-number" data-reach-num>0</span><span class="slider-unit">personas/mes</span></span>
           </label>
-          <input type="range" class="slider" min="0" max="1" value="0" step="1">
+          <input type="range" class="slider" data-slider="reach" min="0" max="${totalReach}" value="0" step="1000">
         </div>
 
         <div class="plan-card">
@@ -243,55 +234,65 @@ function wireCampaignPanel(root, leads) {
   const contactable = leads.filter((l) => l.best_channel && l.best_channel !== "none" && !(l.breakdown && l.breakdown.is_chain));
   if (contactable.length === 0) return;
 
-  // Reach slider usa monthly_visitors_est (más intuitivo que reach_score)
-  const maxVisits = Math.max(...contactable.map((l) => l.monthly_visitors_est || 0));
-  const reachSlider = root.querySelector('[data-slider-mode="reach"] .slider');
-  if (reachSlider) reachSlider.max = maxVisits;
+  const budgetSlider = root.querySelector('[data-slider="budget"]');
+  const reachSlider = root.querySelector('[data-slider="reach"]');
+  let lockedSlider = null; // "budget" | "reach" — qué slider acaba de mover el usuario
 
-  let mode = "budget";
+  // Estrategia única: ordenamos leads por ROI DESC (ticket por dólar invertido).
+  // Así "sumar más" siempre es razonable en ambos sentidos.
+  const sortedByROI = [...contactable].sort((a, b) => (b.roi_estimate || 0) - (a.roi_estimate || 0));
 
-  const modeBtns = root.querySelectorAll(".mode-card");
-  const sliderRows = root.querySelectorAll(".slider-row");
-  modeBtns.forEach((b) => {
-    b.onclick = () => {
-      mode = b.dataset.mode;
-      modeBtns.forEach((mb) => mb.classList.toggle("active", mb === b));
-      sliderRows.forEach((r) => r.classList.toggle("hidden", r.dataset.sliderMode !== mode));
-      updatePreview();
-    };
-  });
-
-  root.querySelectorAll(".slider").forEach((s) => s.addEventListener("input", updatePreview));
-
-  function selectLeads() {
-    if (mode === "budget") {
-      const budget = Number(root.querySelector('[data-slider-mode="budget"] .slider').value);
-      root.querySelector('[data-slider-mode="budget"] .slider-number').textContent = `$${budget}`;
-      // Greedy: sort by cost ASC, pack until budget
-      const sorted = [...contactable].sort((a, b) => (a.cost_per_contact_usd || 0) - (b.cost_per_contact_usd || 0));
-      const picked = [];
-      let spent = 0;
-      for (const l of sorted) {
-        const c = l.cost_per_contact_usd || 0;
-        if (spent + c > budget) continue;
-        picked.push(l);
-        spent += c;
-      }
-      return { picked, budget };
-    } else {
-      const minVisits = Number(root.querySelector('[data-slider-mode="reach"] .slider').value);
-      root.querySelector('[data-slider-mode="reach"] .slider-number').textContent = formatNum(minVisits);
-      const picked = [...contactable]
-        .filter((l) => (l.monthly_visitors_est || 0) >= minVisits)
-        .sort((a, b) => (b.monthly_visitors_est || 0) - (a.monthly_visitors_est || 0));
-      return { picked };
+  // Dado un budget, devuelve los leads que entran (greedy por ROI desc)
+  function pickByBudget(budget) {
+    const picked = [];
+    let spent = 0;
+    for (const l of sortedByROI) {
+      const c = l.cost_per_contact_usd || 0;
+      if (spent + c > budget + 0.0001) continue;
+      picked.push(l);
+      spent += c;
     }
+    return { picked, cost: spent };
   }
 
-  function updatePreview() {
-    const { picked } = selectLeads();
-    const cost = picked.reduce((s, l) => s + (l.cost_per_contact_usd || 0), 0);
-    const reach = picked.reduce((s, l) => s + (l.reach_score || 0), 0);
+  // Dado un reach target, devuelve los leads acumulados por ROI desc hasta alcanzarlo
+  function pickByReach(target) {
+    const picked = [];
+    let acc = 0;
+    for (const l of sortedByROI) {
+      if (acc >= target) break;
+      picked.push(l);
+      acc += l.monthly_visitors_est || 0;
+    }
+    return { picked, reach: acc };
+  }
+
+  budgetSlider.addEventListener("input", () => {
+    lockedSlider = "budget";
+    const budget = Number(budgetSlider.value);
+    const { picked, cost } = pickByBudget(budget);
+    // Actualizar reach slider al alcance resultante
+    const resultingReach = picked.reduce((s, l) => s + (l.monthly_visitors_est || 0), 0);
+    reachSlider.value = resultingReach;
+    updateDisplay(picked, cost, resultingReach);
+  });
+
+  reachSlider.addEventListener("input", () => {
+    lockedSlider = "reach";
+    const target = Number(reachSlider.value);
+    const { picked, reach } = pickByReach(target);
+    const resultingCost = picked.reduce((s, l) => s + (l.cost_per_contact_usd || 0), 0);
+    budgetSlider.value = resultingCost;
+    updateDisplay(picked, resultingCost, reach);
+  });
+
+  function updateDisplay(picked, cost, reach) {
+    root.querySelector('[data-budget-num]').textContent = `$${cost.toFixed(2)}`;
+    root.querySelector('[data-reach-num]').textContent = formatNumCompact(reach);
+    renderStats(picked, cost, reach);
+  }
+
+  function renderStats(picked, cost, reach) {
     const tam = picked.reduce((s, l) => s + (l.estimated_ticket_ars || 0), 0);
     const tamUSD = tam / 1000;
     const roi = cost > 0 ? tamUSD / cost : 0;
@@ -302,7 +303,6 @@ function wireCampaignPanel(root, leads) {
     root.querySelector(".pv-tam").textContent = formatNumCompact(tam);
     root.querySelector(".pv-roi").textContent = roi >= 1 ? roi.toFixed(1) : roi.toFixed(2);
 
-    // Channel breakdown
     const byCh = { email: 0, whatsapp: 0, phone: 0 };
     picked.forEach((l) => { if (byCh[l.best_channel] !== undefined) byCh[l.best_channel]++; });
     root.querySelector(".pv-ch-email").textContent = byCh.email;
@@ -312,7 +312,15 @@ function wireCampaignPanel(root, leads) {
     root._selectedLeads = picked;
   }
 
-  updatePreview();
+  function initial() {
+    const budget = Number(budgetSlider.value);
+    const { picked, cost } = pickByBudget(budget);
+    const resultingReach = picked.reduce((s, l) => s + (l.monthly_visitors_est || 0), 0);
+    reachSlider.value = resultingReach;
+    updateDisplay(picked, cost, resultingReach);
+  }
+
+  initial();
 
   root.querySelector(".execute-btn").onclick = () => {
     const picked = root._selectedLeads || [];
@@ -401,6 +409,32 @@ function addMessage(role, content) {
     div.textContent = content;
   }
   messagesEl.appendChild(div);
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
+function renderOptions(options) {
+  const wrap = document.createElement("div");
+  wrap.className = "options";
+  options.forEach((opt) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "option-chip";
+    btn.textContent = opt;
+    btn.onclick = async () => {
+      // Remover el set de opciones al elegir
+      wrap.remove();
+      const isFreeText = /otro.*escribir|otro.*especificar/i.test(opt);
+      if (isFreeText) {
+        input.focus();
+        return;
+      }
+      addMessage("user", opt);
+      conversation.push({ role: "user", content: opt });
+      await runIntakeTurn();
+    };
+    wrap.appendChild(btn);
+  });
+  messagesEl.appendChild(wrap);
   messagesEl.scrollTop = messagesEl.scrollHeight;
 }
 
